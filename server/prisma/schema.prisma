@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id          Int        @id @default(autoincrement())
+  fullName    String
+  dateOfBirth DateTime
+  gender      String
+  phone       String?
+  address     String?
+  classId     Int?
+  class       Class?     @relation(fields: [classId], references: [id])
+  scores      Score[]
+  homeworks   Homework[]
+  remarks     Remark[]
+  tuitions    Tuition[]
+  createdAt   DateTime   @default(now())
+}
+
+model Class {
+  id        Int        @id @default(autoincrement())
+  name      String
+  students  Student[]
+  schedules Schedule[]
+  createdAt DateTime   @default(now())
+}
+
+model Subject {
+  id        Int        @id @default(autoincrement())
+  name      String
+  scores    Score[]
+  homeworks Homework[]
+  schedules Schedule[]
+}
+
+model Score {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  subjectId Int
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  value     Float
+  date      DateTime
+  note      String?
+}
+
+model Homework {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  subjectId Int
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  title     String
+  status    String   // "chua nop" | "da nop" | "tre han"
+  dueDate   DateTime
+}
+
+model Remark {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  content   String
+  date      DateTime @default(now())
+}
+
+model Tuition {
+  id        Int       @id @default(autoincrement())
+  studentId Int
+  student   Student   @relation(fields: [studentId], references: [id])
+  amount    Float
+  year      Int
+  month     Int       // 1-12
+  status    String    // "da dong" | "chua dong"
+  paidDate  DateTime?
+
+  @@unique([studentId, year, month])
+}
+
+model Schedule {
+  id        Int     @id @default(autoincrement())
+  classId   Int
+  class     Class   @relation(fields: [classId], references: [id])
+  subjectId Int
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  dayOfWeek Int     // 0=CN, 1=Thu2, ... 6=Thu7
+  startTime String  // "07:30"
+  endTime   String  // "09:00"
+}
+
+model Admin {
+  id       Int    @id @default(autoincrement())
+  username String @unique
+  password String // hashed (bcrypt)
+}
