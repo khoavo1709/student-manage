@@ -1,0 +1,25 @@
+databases:
+  - name: student-manage-db
+    plan: free
+    databaseName: student_manage
+    user: student_manage
+
+services:
+  - type: web
+    name: student-manage
+    runtime: node
+    plan: free
+    branch: chinh01
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: student-manage-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
