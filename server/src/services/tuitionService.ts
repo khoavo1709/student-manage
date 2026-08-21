@@ -3,21 +3,28 @@ import { prisma } from "../lib/prisma";
 
 export interface ListTuitionsParams {
   studentId?: number;
+  classId?: number;
   year?: number;
   month?: number;
 }
 
+const tuitionInclude = {
+  student: { select: { id: true, fullName: true } },
+  class: { select: { id: true, name: true, tuitionFee: true } },
+} as const;
+
 export async function listTuitions(params: ListTuitionsParams) {
   const where: Prisma.TuitionWhereInput = {
     ...(params.studentId ? { studentId: params.studentId } : {}),
+    ...(params.classId ? { classId: params.classId } : {}),
     ...(params.year ? { year: params.year } : {}),
     ...(params.month ? { month: params.month } : {}),
   };
-  return prisma.tuition.findMany({ where, orderBy: { id: "asc" } });
+  return prisma.tuition.findMany({ where, include: tuitionInclude, orderBy: { id: "asc" } });
 }
 
 export async function getTuitionById(id: number) {
-  const tuition = await prisma.tuition.findUnique({ where: { id } });
+  const tuition = await prisma.tuition.findUnique({ where: { id }, include: tuitionInclude });
   if (!tuition) {
     throw new Error("Tuition not found");
   }

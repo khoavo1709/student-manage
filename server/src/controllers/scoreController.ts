@@ -14,12 +14,13 @@ const idParamSchema = z.object({
 
 const listQuerySchema = z.object({
   studentId: z.coerce.number().int().positive().optional(),
-  subjectId: z.coerce.number().int().positive().optional(),
+  classId: z.coerce.number().int().positive().optional(),
 });
 
 const scoreBodySchema = z.object({
   studentId: z.number().int().positive(),
-  subjectId: z.number().int().positive(),
+  classId: z.number().int().positive(),
+  examName: z.string().min(1),
   value: z.number(),
   date: z.coerce.date(),
   note: z.string().optional().nullable(),

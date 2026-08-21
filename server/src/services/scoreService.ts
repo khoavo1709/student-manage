@@ -3,19 +3,24 @@ import { prisma } from "../lib/prisma";
 
 export interface ListScoresParams {
   studentId?: number;
-  subjectId?: number;
+  classId?: number;
 }
+
+const scoreInclude = {
+  student: { select: { id: true, fullName: true } },
+  class: { select: { id: true, name: true } },
+} as const;
 
 export async function listScores(params: ListScoresParams) {
   const where: Prisma.ScoreWhereInput = {
     ...(params.studentId ? { studentId: params.studentId } : {}),
-    ...(params.subjectId ? { subjectId: params.subjectId } : {}),
+    ...(params.classId ? { classId: params.classId } : {}),
   };
-  return prisma.score.findMany({ where, orderBy: { id: "asc" } });
+  return prisma.score.findMany({ where, include: scoreInclude, orderBy: { id: "asc" } });
 }
 
 export async function getScoreById(id: number) {
-  const score = await prisma.score.findUnique({ where: { id } });
+  const score = await prisma.score.findUnique({ where: { id }, include: scoreInclude });
   if (!score) {
     throw new Error("Score not found");
   }

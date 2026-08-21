@@ -1,7 +1,7 @@
 const classScoreReport = [
-  { className: "6A1", subjectName: "Toán", averageScore: 8.2, studentCount: 2 },
-  { className: "6A1", subjectName: "Ngữ văn", averageScore: 7.5, studentCount: 2 },
-  { className: "7A1", subjectName: "Tiếng Anh", averageScore: 6.8, studentCount: 1 },
+  { className: "Toán lớp 6", studentName: "Nguyễn Văn An", averageScore: 8.75 },
+  { className: "Toán lớp 6", studentName: "Trần Thị Bình", averageScore: 7.0 },
+  { className: "Lý lớp 7", studentName: "Lê Minh Đức", averageScore: 6.8 },
 ];
 
 const tuitionReport = [
@@ -28,7 +28,7 @@ export default function ReportsPage() {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-200 px-5 py-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            Điểm trung bình theo lớp/môn
+            Điểm trung bình theo học sinh
           </h2>
         </div>
 
@@ -36,15 +36,11 @@ export default function ReportsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr>
+                <th className="px-4 py-3 font-semibold text-gray-600">
+                  Học sinh
+                </th>
+
                 <th className="px-4 py-3 font-semibold text-gray-600">Lớp</th>
-
-                <th className="px-4 py-3 font-semibold text-gray-600">
-                  Môn học
-                </th>
-
-                <th className="px-4 py-3 font-semibold text-gray-600">
-                  Số học sinh
-                </th>
 
                 <th className="px-4 py-3 font-semibold text-gray-600">
                   Điểm trung bình
@@ -56,7 +52,7 @@ export default function ReportsPage() {
               {classScoreReport.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={3}
                     className="px-4 py-10 text-center text-gray-500"
                   >
                     Chưa có dữ liệu điểm số.
@@ -65,21 +61,17 @@ export default function ReportsPage() {
               ) : (
                 classScoreReport.map((row) => (
                   <tr
-                    key={`${row.className}-${row.subjectName}`}
+                    key={`${row.className}-${row.studentName}`}
                     className="hover:bg-gray-50"
                   >
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {row.studentName}
+                    </td>
+
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
                         {row.className}
                       </span>
-                    </td>
-
-                    <td className="px-4 py-3 text-gray-600">
-                      {row.subjectName}
-                    </td>
-
-                    <td className="px-4 py-3 text-gray-600">
-                      {row.studentCount}
                     </td>
 
                     <td className="px-4 py-3 font-medium text-gray-900">

@@ -1,15 +1,27 @@
 import { useState } from "react";
 import { Toast } from "../components/Toast";
+import { MultiSelectFilter } from "../components/MultiSelectFilter";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
 type Student = {
   id: number;
   fullName: string;
   dateOfBirth: string;
   gender: string;
-  phone: string;
   address: string;
-  className: string;
+  classNames: string[];
+  guardianName: string;
+  guardianPhone: string;
+  guardianRelation: string;
 };
+
+const availableClasses = [
+  "Toán lớp 3",
+  "Toán lớp 6",
+  "Lý lớp 7",
+  "Văn lớp 8",
+  "Anh lớp 9",
+];
 
 const demoStudents: Student[] = [
   {
@@ -17,40 +29,61 @@ const demoStudents: Student[] = [
     fullName: "Nguyễn Văn An",
     dateOfBirth: "2012-03-15",
     gender: "Nam",
-    phone: "0912345678",
     address: "Ninh Bình",
-    className: "6A1",
+    classNames: ["Toán lớp 6", "Lý lớp 7"],
+    guardianName: "Nguyễn Văn Bình",
+    guardianPhone: "0912000001",
+    guardianRelation: "Bố",
   },
   {
     id: 2,
     fullName: "Trần Thị Bình",
     dateOfBirth: "2012-07-22",
     gender: "Nữ",
-    phone: "0987654321",
     address: "Ninh Bình",
-    className: "6A1",
+    classNames: ["Toán lớp 6"],
+    guardianName: "Trần Thị Hoa",
+    guardianPhone: "0987000002",
+    guardianRelation: "Mẹ",
   },
   {
     id: 3,
     fullName: "Lê Minh Đức",
     dateOfBirth: "2011-11-08",
     gender: "Nam",
-    phone: "0901234567",
     address: "Ninh Bình",
-    className: "7A1",
+    classNames: ["Lý lớp 7"],
+    guardianName: "Lê Văn Hùng",
+    guardianPhone: "0901000003",
+    guardianRelation: "Bố",
   },
 ];
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>(demoStudents);
   const [search, setSearch] = useState("");
+  const [classFilters, setClassFilters] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
+  useLockBodyScroll(showForm);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const filteredStudents = students.filter((student) =>
-    student.fullName.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredStudents = students.filter((student) => {
+    const matchesSearch = student.fullName
+      .toLowerCase()
+      .includes(search.toLowerCase());
+    const matchesClass =
+      classFilters.length === 0 ||
+      student.classNames.some((className) => classFilters.includes(className));
+    return matchesSearch && matchesClass;
+  });
+
+  const hasActiveFilters = Boolean(search || classFilters.length > 0);
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setClassFilters([]);
+  };
 
   const handleDelete = (id: number) => {
     const student = students.find((item) => item.id === id);
@@ -88,12 +121,14 @@ export default function StudentsPage() {
     const fullName = String(formData.get("fullName") || "");
     const dateOfBirth = String(formData.get("dateOfBirth") || "");
     const gender = String(formData.get("gender") || "");
-    const phone = String(formData.get("phone") || "");
     const address = String(formData.get("address") || "");
-    const className = String(formData.get("className") || "");
+    const classNames = formData.getAll("classNames").map(String);
+    const guardianName = String(formData.get("guardianName") || "");
+    const guardianPhone = String(formData.get("guardianPhone") || "");
+    const guardianRelation = String(formData.get("guardianRelation") || "");
 
-    if (!fullName || !dateOfBirth || !gender || !className) {
-      alert("Vui lòng nhập đầy đủ các thông tin bắt buộc.");
+    if (!fullName || !dateOfBirth || !gender || classNames.length === 0) {
+      alert("Vui lòng nhập đầy đủ các thông tin bắt buộc (chọn ít nhất 1 lớp).");
       return;
     }
 
@@ -106,9 +141,11 @@ export default function StudentsPage() {
                 fullName,
                 dateOfBirth,
                 gender,
-                phone,
                 address,
-                className,
+                classNames,
+                guardianName,
+                guardianPhone,
+                guardianRelation,
               }
             : student
         )
@@ -121,9 +158,11 @@ export default function StudentsPage() {
         fullName,
         dateOfBirth,
         gender,
-        phone,
         address,
-        className,
+        classNames,
+        guardianName,
+        guardianPhone,
+        guardianRelation,
       };
 
       setStudents((current) => [...current, newStudent]);
@@ -151,7 +190,7 @@ export default function StudentsPage() {
           </h1>
 
           <p className="mt-1 text-sm text-gray-500">
-            Quản lý danh sách học sinh
+            Quản lý danh sách học sinh (1 học sinh có thể học nhiều lớp)
           </p>
         </div>
 
@@ -167,21 +206,74 @@ export default function StudentsPage() {
         </button>
       </div>
 
-      {/* Search */}
+      {/* Filters */}
       <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tìm kiếm theo tên học sinh..."
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            <label className="mb-1 block text-xs font-medium text-gray-500">
+              Tên học sinh
+            </label>
+
+            <div className="flex items-center rounded-lg border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+              <span className="flex shrink-0 items-center pl-3 text-gray-400">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </span>
+
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Tìm theo tên học sinh..."
+                className="w-full rounded-lg bg-transparent px-2.5 py-2 text-sm outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="sm:w-56">
+            <MultiSelectFilter
+              label="Lớp"
+              options={availableClasses}
+              selected={classFilters}
+              onChange={setClassFilters}
+              placeholder="Tất cả các lớp"
             />
           </div>
 
-          <div className="rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-600">
-            Tổng: <strong>{filteredStudents.length}</strong> học sinh
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 sm:w-auto"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              Xóa lọc
+            </button>
+          )}
+
+          <div className="whitespace-nowrap rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-600 sm:ml-auto">
+            Tổng: <strong className="text-gray-900">{filteredStudents.length}</strong> học sinh
           </div>
         </div>
       </div>
@@ -213,6 +305,10 @@ export default function StudentsPage() {
                 </th>
 
                 <th className="px-4 py-3 font-semibold text-gray-600">
+                  Người thân
+                </th>
+
+                <th className="px-4 py-3 font-semibold text-gray-600">
                   Số điện thoại
                 </th>
 
@@ -226,7 +322,7 @@ export default function StudentsPage() {
               {filteredStudents.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-10 text-center text-gray-500"
                   >
                     Không tìm thấy học sinh.
@@ -259,13 +355,39 @@ export default function StudentsPage() {
                     </td>
 
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                        {student.className}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {student.classNames.length === 0 ? (
+                          "-"
+                        ) : (
+                          student.classNames.map((className) => (
+                            <span
+                              key={className}
+                              className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+                            >
+                              {className}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {student.guardianName ? (
+                        <div className="font-medium text-gray-900">
+                          {student.guardianName}
+                          {student.guardianRelation && (
+                            <span className="ml-1 font-normal text-gray-500">
+                              ({student.guardianRelation})
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        "-"
+                      )}
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {student.phone || "-"}
+                      {student.guardianPhone || "-"}
                     </td>
 
                     <td className="px-4 py-3">
@@ -368,37 +490,33 @@ export default function StudentsPage() {
                   </select>
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Lớp <span className="text-red-500">*</span>
+                    Lớp <span className="text-red-500">*</span>{" "}
+                    <span className="font-normal text-gray-400">
+                      (có thể chọn nhiều lớp)
+                    </span>
                   </label>
 
-                  <select
-                    name="className"
-                    defaultValue={editingStudent?.className || ""}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="">Chọn lớp</option>
-                    <option value="6A1">6A1</option>
-                    <option value="6A2">6A2</option>
-                    <option value="7A1">7A1</option>
-                    <option value="7A2">7A2</option>
-                    <option value="8A1">8A1</option>
-                    <option value="9A1">9A1</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Số điện thoại
-                  </label>
-
-                  <input
-                    name="phone"
-                    defaultValue={editingStudent?.phone || ""}
-                    placeholder="0912345678"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
+                  <div className="flex flex-wrap gap-3 rounded-lg border border-gray-300 px-3 py-2">
+                    {availableClasses.map((className) => (
+                      <label
+                        key={className}
+                        className="flex items-center gap-1.5 text-sm text-gray-700"
+                      >
+                        <input
+                          type="checkbox"
+                          name="classNames"
+                          value={className}
+                          defaultChecked={editingStudent?.classNames.includes(
+                            className
+                          )}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        {className}
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
@@ -412,6 +530,56 @@ export default function StudentsPage() {
                     placeholder="Nhập địa chỉ..."
                     rows={3}
                     className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                <div className="md:col-span-2 mt-2 border-t border-gray-200 pt-4">
+                  <p className="text-sm font-semibold text-gray-900">
+                    Thông tin người thân
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Họ tên người thân
+                  </label>
+
+                  <input
+                    name="guardianName"
+                    defaultValue={editingStudent?.guardianName || ""}
+                    placeholder="Nguyễn Văn B"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Quan hệ với học sinh
+                  </label>
+
+                  <select
+                    name="guardianRelation"
+                    defaultValue={editingStudent?.guardianRelation || ""}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Chọn quan hệ</option>
+                    <option value="Bố">Bố</option>
+                    <option value="Mẹ">Mẹ</option>
+                    <option value="Người giám hộ">Người giám hộ</option>
+                    <option value="Khác">Khác</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Số điện thoại người thân
+                  </label>
+
+                  <input
+                    name="guardianPhone"
+                    defaultValue={editingStudent?.guardianPhone || ""}
+                    placeholder="0912000001"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
               </div>

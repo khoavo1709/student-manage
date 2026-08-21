@@ -31,11 +31,11 @@ function ClassesIcon() {
   );
 }
 
-function SubjectsIcon() {
+function ScoresIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+      <circle cx="12" cy="8" r="6" />
+      <path d="M9 13.5 7 22l5-3 5 3-2-8.5" />
     </svg>
   );
 }
@@ -80,7 +80,7 @@ const navItems: { to: string; label: string; icon: () => ReactNode }[] = [
   { to: "/", label: "Tổng quan", icon: DashboardIcon },
   { to: "/students", label: "Học sinh", icon: StudentsIcon },
   { to: "/classes", label: "Lớp học", icon: ClassesIcon },
-  { to: "/subjects", label: "Môn học", icon: SubjectsIcon },
+  { to: "/scores", label: "Điểm số", icon: ScoresIcon },
   { to: "/schedule", label: "Lịch học", icon: ScheduleIcon },
   { to: "/tuitions", label: "Học phí", icon: TuitionsIcon },
   { to: "/reports", label: "Báo cáo", icon: ReportsIcon },

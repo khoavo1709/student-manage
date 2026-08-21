@@ -1,26 +1,40 @@
 import { useState } from "react";
+import { MultiSelectFilter } from "../components/MultiSelectFilter";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
 type Class = {
   id: number;
   name: string;
+  tuitionFee: number;
   studentCount: number;
 };
 
 const demoClasses: Class[] = [
-  { id: 1, name: "6A1", studentCount: 2 },
-  { id: 2, name: "6A2", studentCount: 0 },
-  { id: 3, name: "7A1", studentCount: 1 },
+  { id: 1, name: "Toán lớp 6", tuitionFee: 1500000, studentCount: 2 },
+  { id: 2, name: "Lý lớp 7", tuitionFee: 1800000, studentCount: 1 },
+  { id: 3, name: "Anh lớp 9", tuitionFee: 2000000, studentCount: 0 },
 ];
+
+function formatCurrency(amount: number) {
+  return amount.toLocaleString("vi-VN") + " đ";
+}
 
 export default function ClassesPage() {
   const [classes, setClasses] = useState<Class[]>(demoClasses);
-  const [search, setSearch] = useState("");
+  const [classFilters, setClassFilters] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
+  useLockBodyScroll(showForm);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
 
-  const filteredClasses = classes.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
+  const filteredClasses = classes.filter(
+    (item) => classFilters.length === 0 || classFilters.includes(item.name)
   );
+
+  const hasActiveFilters = classFilters.length > 0;
+
+  const handleClearFilters = () => {
+    setClassFilters([]);
+  };
 
   const handleDelete = (id: number) => {
     const classItem = classes.find((item) => item.id === id);
@@ -52,9 +66,15 @@ export default function ClassesPage() {
     const formData = new FormData(event.currentTarget);
 
     const name = String(formData.get("name") || "");
+    const tuitionFee = Number(formData.get("tuitionFee"));
 
-    if (!name) {
+    if (!name || Number.isNaN(tuitionFee)) {
       alert("Vui lòng nhập đầy đủ các thông tin bắt buộc.");
+      return;
+    }
+
+    if (tuitionFee < 0) {
+      alert("Học phí không được nhỏ hơn 0.");
       return;
     }
 
@@ -65,6 +85,7 @@ export default function ClassesPage() {
             ? {
                 ...item,
                 name,
+                tuitionFee,
               }
             : item
         )
@@ -73,6 +94,7 @@ export default function ClassesPage() {
       const newClass: Class = {
         id: Date.now(),
         name,
+        tuitionFee,
         studentCount: 0,
       };
 
@@ -90,7 +112,7 @@ export default function ClassesPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Lớp học</h1>
 
           <p className="mt-1 text-sm text-gray-500">
-            Quản lý danh sách lớp học
+            Quản lý danh sách lớp học (mỗi lớp gồm 1 môn + khối, VD: Toán lớp 3)
           </p>
         </div>
 
@@ -106,21 +128,43 @@ export default function ClassesPage() {
         </button>
       </div>
 
-      {/* Search */}
+      {/* Filters */}
       <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tìm kiếm theo tên lớp..."
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="sm:w-64">
+            <MultiSelectFilter
+              label="Lớp"
+              options={classes.map((item) => item.name)}
+              selected={classFilters}
+              onChange={setClassFilters}
+              placeholder="Tất cả các lớp"
             />
           </div>
 
-          <div className="rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-600">
-            Tổng: <strong>{filteredClasses.length}</strong> lớp
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 sm:w-auto"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              Xóa lọc
+            </button>
+          )}
+
+          <div className="whitespace-nowrap rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-600 sm:ml-auto">
+            Tổng: <strong className="text-gray-900">{filteredClasses.length}</strong> lớp
           </div>
         </div>
       </div>
@@ -143,6 +187,10 @@ export default function ClassesPage() {
                   Sĩ số
                 </th>
 
+                <th className="px-4 py-3 font-semibold text-gray-600">
+                  Học phí/tháng
+                </th>
+
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">
                   Thao tác
                 </th>
@@ -153,7 +201,7 @@ export default function ClassesPage() {
               {filteredClasses.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="px-4 py-10 text-center text-gray-500"
                   >
                     Không tìm thấy lớp học.
@@ -174,6 +222,10 @@ export default function ClassesPage() {
                       <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
                         {classItem.studentCount} học sinh
                       </span>
+                    </td>
+
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {formatCurrency(classItem.tuitionFee)}
                     </td>
 
                     <td className="px-4 py-3">
@@ -239,7 +291,23 @@ export default function ClassesPage() {
                   <input
                     name="name"
                     defaultValue={editingClass?.name || ""}
-                    placeholder="6A1"
+                    placeholder="Toán lớp 3"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Học phí/tháng (đ) <span className="text-red-500">*</span>
+                  </label>
+
+                  <input
+                    type="number"
+                    name="tuitionFee"
+                    min={0}
+                    step={10000}
+                    defaultValue={editingClass?.tuitionFee ?? ""}
+                    placeholder="1500000"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>

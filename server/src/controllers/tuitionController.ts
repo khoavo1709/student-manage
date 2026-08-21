@@ -15,6 +15,7 @@ const idParamSchema = z.object({
 
 const listQuerySchema = z.object({
   studentId: z.coerce.number().int().positive().optional(),
+  classId: z.coerce.number().int().positive().optional(),
   year: z.coerce.number().int().positive().optional(),
   month: z.coerce.number().int().min(1).max(12).optional(),
 });
@@ -22,7 +23,7 @@ const listQuerySchema = z.object({
 const tuitionBodySchema = z
   .object({
     studentId: z.number().int().positive(),
-    amount: z.number(),
+    classId: z.number().int().positive(),
     year: z.number().int().positive(),
     month: z.number().int(),
     status: z.string().min(1),
@@ -35,7 +36,7 @@ const tuitionBodySchema = z
 
 const tuitionUpdateSchema = z.object({
   studentId: z.number().int().positive().optional(),
-  amount: z.number().optional(),
+  classId: z.number().int().positive().optional(),
   year: z.number().int().positive().optional(),
   month: z.number().int().min(1).max(12).optional(),
   status: z.string().min(1).optional(),
@@ -93,7 +94,7 @@ export async function createTuitionHandler(req: Request, res: Response) {
       return res.status(409).json({
         success: false,
         data: null,
-        error: "Tuition already exists for this student in this month",
+        error: "Tuition already exists for this student/class in this month",
       });
     }
     res.status(500).json({ success: false, data: null, error: "Failed to create tuition" });
@@ -118,7 +119,7 @@ export async function updateTuitionHandler(req: Request, res: Response) {
       return res.status(409).json({
         success: false,
         data: null,
-        error: "Tuition already exists for this student in this month",
+        error: "Tuition already exists for this student/class in this month",
       });
     }
     res.status(500).json({ success: false, data: null, error: "Failed to update tuition" });

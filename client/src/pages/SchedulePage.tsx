@@ -1,12 +1,16 @@
 import { useState } from "react";
+import { ClockTimePicker } from "../components/ClockTimePicker";
+import { DatePickerField } from "../components/DatePickerField";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
 type Schedule = {
   id: number;
   className: string;
-  subjectName: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  startDate: string;
+  endDate: string;
 };
 
 const dayOfWeekLabels = [
@@ -22,37 +26,49 @@ const dayOfWeekLabels = [
 const demoSchedules: Schedule[] = [
   {
     id: 1,
-    className: "6A1",
-    subjectName: "Toán",
+    className: "Toán lớp 6",
     dayOfWeek: 2,
     startTime: "07:30",
     endTime: "09:00",
+    startDate: "2026-09-01",
+    endDate: "2026-12-31",
   },
   {
     id: 2,
-    className: "6A1",
-    subjectName: "Ngữ văn",
+    className: "Toán lớp 6",
     dayOfWeek: 4,
     startTime: "09:15",
     endTime: "10:45",
+    startDate: "2026-09-01",
+    endDate: "2026-12-31",
   },
   {
     id: 3,
-    className: "7A1",
-    subjectName: "Tiếng Anh",
+    className: "Lý lớp 7",
     dayOfWeek: 3,
     startTime: "13:30",
     endTime: "15:00",
+    startDate: "2026-09-01",
+    endDate: "2026-12-31",
   },
 ];
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("vi-VN");
+}
 
 export default function SchedulePage() {
   const [schedules, setSchedules] = useState<Schedule[]>(demoSchedules);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  useLockBodyScroll(showForm);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(
     null
   );
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const filteredSchedules = schedules.filter((item) =>
     item.className.toLowerCase().includes(search.toLowerCase())
@@ -64,7 +80,7 @@ export default function SchedulePage() {
     if (!schedule) return;
 
     const confirmed = window.confirm(
-      `Bạn có chắc muốn xóa lịch học lớp "${schedule.className}" - ${schedule.subjectName} không?`
+      `Bạn có chắc muốn xóa lịch học lớp "${schedule.className}" không?`
     );
 
     if (!confirmed) return;
@@ -74,12 +90,20 @@ export default function SchedulePage() {
 
   const handleEdit = (schedule: Schedule) => {
     setEditingSchedule(schedule);
+    setStartTime(schedule.startTime);
+    setEndTime(schedule.endTime);
+    setStartDate(schedule.startDate);
+    setEndDate(schedule.endDate);
     setShowForm(true);
   };
 
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingSchedule(null);
+    setStartTime("");
+    setEndTime("");
+    setStartDate("");
+    setEndDate("");
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -88,17 +112,15 @@ export default function SchedulePage() {
     const formData = new FormData(event.currentTarget);
 
     const className = String(formData.get("className") || "");
-    const subjectName = String(formData.get("subjectName") || "");
     const dayOfWeek = Number(formData.get("dayOfWeek"));
-    const startTime = String(formData.get("startTime") || "");
-    const endTime = String(formData.get("endTime") || "");
 
     if (
       !className ||
-      !subjectName ||
       Number.isNaN(dayOfWeek) ||
       !startTime ||
-      !endTime
+      !endTime ||
+      !startDate ||
+      !endDate
     ) {
       alert("Vui lòng nhập đầy đủ các thông tin bắt buộc.");
       return;
@@ -109,6 +131,11 @@ export default function SchedulePage() {
       return;
     }
 
+    if (startDate > endDate) {
+      alert("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.");
+      return;
+    }
+
     if (editingSchedule) {
       setSchedules((current) =>
         current.map((item) =>
@@ -116,10 +143,11 @@ export default function SchedulePage() {
             ? {
                 ...item,
                 className,
-                subjectName,
                 dayOfWeek,
                 startTime,
                 endTime,
+                startDate,
+                endDate,
               }
             : item
         )
@@ -128,10 +156,11 @@ export default function SchedulePage() {
       const newSchedule: Schedule = {
         id: Date.now(),
         className,
-        subjectName,
         dayOfWeek,
         startTime,
         endTime,
+        startDate,
+        endDate,
       };
 
       setSchedules((current) => [...current, newSchedule]);
@@ -156,6 +185,10 @@ export default function SchedulePage() {
           type="button"
           onClick={() => {
             setEditingSchedule(null);
+            setStartTime("");
+            setEndTime("");
+            setStartDate("");
+            setEndDate("");
             setShowForm(true);
           }}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -198,15 +231,19 @@ export default function SchedulePage() {
                 </th>
 
                 <th className="px-4 py-3 font-semibold text-gray-600">
-                  Môn học
-                </th>
-
-                <th className="px-4 py-3 font-semibold text-gray-600">
                   Thứ
                 </th>
 
                 <th className="px-4 py-3 font-semibold text-gray-600">
                   Thời gian
+                </th>
+
+                <th className="px-4 py-3 font-semibold text-gray-600">
+                  Ngày bắt đầu
+                </th>
+
+                <th className="px-4 py-3 font-semibold text-gray-600">
+                  Ngày kết thúc
                 </th>
 
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">
@@ -219,7 +256,7 @@ export default function SchedulePage() {
               {filteredSchedules.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-10 text-center text-gray-500"
                   >
                     Không tìm thấy lịch học.
@@ -237,15 +274,19 @@ export default function SchedulePage() {
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {schedule.subjectName}
-                    </td>
-
-                    <td className="px-4 py-3 text-gray-600">
                       {dayOfWeekLabels[schedule.dayOfWeek]}
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
                       {schedule.startTime} - {schedule.endTime}
+                    </td>
+
+                    <td className="px-4 py-3 text-gray-600">
+                      {formatDate(schedule.startDate)}
+                    </td>
+
+                    <td className="px-4 py-3 text-gray-600">
+                      {formatDate(schedule.endDate)}
                     </td>
 
                     <td className="px-4 py-3">
@@ -277,7 +318,7 @@ export default function SchedulePage() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-10">
           <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
             {/* Modal header */}
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
@@ -303,7 +344,7 @@ export default function SchedulePage() {
             {/* Form */}
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
-                <div>
+                <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Lớp <span className="text-red-500">*</span>
                   </label>
@@ -314,29 +355,11 @@ export default function SchedulePage() {
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="">Chọn lớp</option>
-                    <option value="6A1">6A1</option>
-                    <option value="6A2">6A2</option>
-                    <option value="7A1">7A1</option>
-                    <option value="7A2">7A2</option>
-                    <option value="8A1">8A1</option>
-                    <option value="9A1">9A1</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Môn học <span className="text-red-500">*</span>
-                  </label>
-
-                  <select
-                    name="subjectName"
-                    defaultValue={editingSchedule?.subjectName || ""}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="">Chọn môn học</option>
-                    <option value="Toán">Toán</option>
-                    <option value="Ngữ văn">Ngữ văn</option>
-                    <option value="Tiếng Anh">Tiếng Anh</option>
+                    <option value="Toán lớp 3">Toán lớp 3</option>
+                    <option value="Toán lớp 6">Toán lớp 6</option>
+                    <option value="Lý lớp 7">Lý lớp 7</option>
+                    <option value="Văn lớp 8">Văn lớp 8</option>
+                    <option value="Anh lớp 9">Anh lớp 9</option>
                   </select>
                 </div>
 
@@ -359,32 +382,54 @@ export default function SchedulePage() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Giờ bắt đầu <span className="text-red-500">*</span>
-                    </label>
+                <div />
 
-                    <input
-                      type="time"
-                      name="startTime"
-                      defaultValue={editingSchedule?.startTime || ""}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Giờ bắt đầu <span className="text-red-500">*</span>
+                  </label>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Giờ kết thúc <span className="text-red-500">*</span>
-                    </label>
+                  <ClockTimePicker
+                    name="startTime"
+                    value={startTime}
+                    onChange={setStartTime}
+                  />
+                </div>
 
-                    <input
-                      type="time"
-                      name="endTime"
-                      defaultValue={editingSchedule?.endTime || ""}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Giờ kết thúc <span className="text-red-500">*</span>
+                  </label>
+
+                  <ClockTimePicker
+                    name="endTime"
+                    value={endTime}
+                    onChange={setEndTime}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Ngày bắt đầu <span className="text-red-500">*</span>
+                  </label>
+
+                  <DatePickerField
+                    name="startDate"
+                    value={startDate}
+                    onChange={setStartDate}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Ngày kết thúc <span className="text-red-500">*</span>
+                  </label>
+
+                  <DatePickerField
+                    name="endDate"
+                    value={endDate}
+                    onChange={setEndDate}
+                  />
                 </div>
               </div>
 

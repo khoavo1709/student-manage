@@ -5,7 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import StudentsPage from "./pages/StudentsPage";
 import ClassesPage from "./pages/ClassesPage";
-import SubjectsPage from "./pages/SubjectsPage";
+import ScoresPage from "./pages/ScoresPage";
 import SchedulePage from "./pages/SchedulePage";
 import TuitionsPage from "./pages/TuitionsPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -20,7 +20,7 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/students" element={<StudentsPage />} />
             <Route path="/classes" element={<ClassesPage />} />
-            <Route path="/subjects" element={<SubjectsPage />} />
+            <Route path="/scores" element={<ScoresPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/tuitions" element={<TuitionsPage />} />
             <Route path="/reports" element={<ReportsPage />} />

@@ -1,28 +1,34 @@
 const summaryCards = [
   { label: "Tổng học sinh", value: 3, accent: "text-blue-600" },
   { label: "Tổng lớp học", value: 3, accent: "text-emerald-600" },
-  { label: "Môn học", value: 3, accent: "text-purple-600" },
+  { label: "Điểm đã nhập", value: 3, accent: "text-purple-600" },
   { label: "Học phí chưa thu", value: 2, accent: "text-amber-600" },
 ];
 
-const recentRemarks = [
+// Demo: ghi chú lấy từ note của đợt điểm gần nhất theo học sinh (nguồn: trang Điểm số).
+const recentScoreNotes = [
   {
     id: 1,
     studentName: "Nguyễn Văn An",
-    content: "Tích cực phát biểu trong giờ Toán.",
-    date: "2026-08-18",
-  },
-  {
-    id: 2,
-    studentName: "Trần Thị Bình",
-    content: "Cần cải thiện bài tập về nhà môn Ngữ văn.",
-    date: "2026-08-17",
+    examName: "Đợt 2",
+    note: "Tiến bộ rõ rệt",
+    date: "2026-08-19",
   },
 ];
 
+const dayOfWeekLabels = [
+  "Chủ nhật",
+  "Thứ 2",
+  "Thứ 3",
+  "Thứ 4",
+  "Thứ 5",
+  "Thứ 6",
+  "Thứ 7",
+];
+
 const upcomingSchedules = [
-  { id: 1, className: "6A1", subjectName: "Toán", startTime: "07:30", endTime: "09:00" },
-  { id: 2, className: "7A1", subjectName: "Tiếng Anh", startTime: "13:30", endTime: "15:00" },
+  { id: 1, className: "Toán lớp 6", dayOfWeek: 2, startTime: "07:30", endTime: "09:00" },
+  { id: 2, className: "Lý lớp 7", dayOfWeek: 3, startTime: "13:30", endTime: "15:00" },
 ];
 
 export default function DashboardPage() {
@@ -53,34 +59,39 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Recent remarks */}
+        {/* Recent score notes */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-gray-900">
-            Nhận xét gần đây
+            Ghi chú gần đây
           </h2>
 
+          <p className="mt-1 text-xs text-gray-500">
+            Ghi chú từ đợt kiểm tra gần nhất của mỗi học sinh
+          </p>
+
           <div className="mt-4 space-y-3">
-            {recentRemarks.length === 0 ? (
-              <p className="text-sm text-gray-500">Chưa có nhận xét nào.</p>
+            {recentScoreNotes.length === 0 ? (
+              <p className="text-sm text-gray-500">Chưa có ghi chú nào.</p>
             ) : (
-              recentRemarks.map((remark) => (
+              recentScoreNotes.map((item) => (
                 <div
-                  key={remark.id}
+                  key={item.id}
                   className="rounded-lg border border-gray-100 bg-gray-50 p-3"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-900">
-                      {remark.studentName}
+                      {item.studentName}
+                      <span className="ml-1 font-normal text-gray-500">
+                        ({item.examName})
+                      </span>
                     </span>
 
                     <span className="text-xs text-gray-500">
-                      {new Date(remark.date).toLocaleDateString("vi-VN")}
+                      {new Date(item.date).toLocaleDateString("vi-VN")}
                     </span>
                   </div>
 
-                  <p className="mt-1 text-sm text-gray-600">
-                    {remark.content}
-                  </p>
+                  <p className="mt-1 text-sm text-gray-600">{item.note}</p>
                 </div>
               ))
             )}
@@ -93,26 +104,41 @@ export default function DashboardPage() {
             Lịch học sắp tới
           </h2>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-2">
             {upcomingSchedules.length === 0 ? (
               <p className="text-sm text-gray-500">Chưa có lịch học nào.</p>
             ) : (
               upcomingSchedules.map((schedule) => (
                 <div
                   key={schedule.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 p-3"
+                  className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3 transition-colors hover:border-indigo-100 hover:bg-indigo-50/40"
                 >
-                  <div>
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                      {schedule.className}
-                    </span>
-
-                    <span className="ml-2 text-sm text-gray-700">
-                      {schedule.subjectName}
-                    </span>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-5 w-5"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 2" />
+                    </svg>
                   </div>
 
-                  <span className="text-xs text-gray-500">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-900">
+                      {schedule.className}
+                    </p>
+
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {dayOfWeekLabels[schedule.dayOfWeek]}
+                    </p>
+                  </div>
+
+                  <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-200">
                     {schedule.startTime} - {schedule.endTime}
                   </span>
                 </div>

@@ -22,9 +22,11 @@ const studentBodySchema = z.object({
   fullName: z.string().min(1),
   dateOfBirth: z.coerce.date(),
   gender: z.string().min(1),
-  phone: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
-  classId: z.number().int().positive().optional().nullable(),
+  guardianName: z.string().optional().nullable(),
+  guardianPhone: z.string().optional().nullable(),
+  guardianRelation: z.string().optional().nullable(),
+  classIds: z.array(z.number().int().positive()).optional().default([]),
 });
 
 const studentUpdateSchema = studentBodySchema.partial();

@@ -8,89 +8,76 @@ datasource db {
 }
 
 model Student {
-  id          Int        @id @default(autoincrement())
-  fullName    String
-  dateOfBirth DateTime
-  gender      String
-  phone       String?
-  address     String?
-  classId     Int?
-  class       Class?     @relation(fields: [classId], references: [id])
-  scores      Score[]
-  homeworks   Homework[]
-  remarks     Remark[]
-  tuitions    Tuition[]
-  createdAt   DateTime   @default(now())
+  id                Int             @id @default(autoincrement())
+  fullName          String
+  dateOfBirth       DateTime
+  gender            String
+  address           String?
+  guardianName      String?
+  guardianPhone     String?
+  guardianRelation  String?         // "Bo" | "Me" | "Nguoi giam ho" | ...
+  classes           StudentClass[]
+  scores            Score[]
+  tuitions          Tuition[]
+  createdAt         DateTime        @default(now())
 }
 
 model Class {
-  id        Int        @id @default(autoincrement())
-  name      String
-  students  Student[]
-  schedules Schedule[]
-  createdAt DateTime   @default(now())
+  id          Int             @id @default(autoincrement())
+  name        String          // VD: "Toan lop 3", "Ly lop 7" (mon hoc + khoi gop trong ten)
+  tuitionFee  Float           // hoc phi co dinh theo thang cho lop nay
+  students    StudentClass[]
+  scores      Score[]
+  tuitions    Tuition[]
+  schedules   Schedule[]
+  createdAt   DateTime        @default(now())
 }
 
-model Subject {
-  id        Int        @id @default(autoincrement())
-  name      String
-  scores    Score[]
-  homeworks Homework[]
-  schedules Schedule[]
+// Bang trung gian: 1 hoc sinh co the hoc nhieu lop, 1 lop co nhieu hoc sinh.
+model StudentClass {
+  studentId Int
+  student   Student @relation(fields: [studentId], references: [id])
+  classId   Int
+  class     Class   @relation(fields: [classId], references: [id])
+
+  @@id([studentId, classId])
 }
 
 model Score {
   id        Int      @id @default(autoincrement())
   studentId Int
   student   Student  @relation(fields: [studentId], references: [id])
-  subjectId Int
-  subject   Subject  @relation(fields: [subjectId], references: [id])
+  classId   Int      // bai kiem tra thuoc lop nao (hoc sinh co the hoc nhieu lop)
+  class     Class    @relation(fields: [classId], references: [id])
+  examName  String   // VD: "Dot 1", "Dot 2", "Kiem tra giua ky"
   value     Float
   date      DateTime
   note      String?
-}
-
-model Homework {
-  id        Int      @id @default(autoincrement())
-  studentId Int
-  student   Student  @relation(fields: [studentId], references: [id])
-  subjectId Int
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  title     String
-  status    String   // "chua nop" | "da nop" | "tre han"
-  dueDate   DateTime
-}
-
-model Remark {
-  id        Int      @id @default(autoincrement())
-  studentId Int
-  student   Student  @relation(fields: [studentId], references: [id])
-  content   String
-  date      DateTime @default(now())
 }
 
 model Tuition {
   id        Int       @id @default(autoincrement())
   studentId Int
   student   Student   @relation(fields: [studentId], references: [id])
-  amount    Float
+  classId   Int       // hoc sinh hoc nhieu lop se co nhieu khoan phi/thang, moi khoan gan voi 1 lop
+  class     Class     @relation(fields: [classId], references: [id])
   year      Int
   month     Int       // 1-12
   status    String    // "da dong" | "chua dong"
   paidDate  DateTime?
 
-  @@unique([studentId, year, month])
+  @@unique([studentId, classId, year, month])
 }
 
 model Schedule {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   classId   Int
-  class     Class   @relation(fields: [classId], references: [id])
-  subjectId Int
-  subject   Subject @relation(fields: [subjectId], references: [id])
-  dayOfWeek Int     // 0=CN, 1=Thu2, ... 6=Thu7
-  startTime String  // "07:30"
-  endTime   String  // "09:00"
+  class     Class    @relation(fields: [classId], references: [id])
+  dayOfWeek Int      // 0=CN, 1=Thu2, ... 6=Thu7
+  startTime String   // "07:30"
+  endTime   String   // "09:00"
+  startDate DateTime // ngay bat dau ap dung lich nay
+  endDate   DateTime // ngay ket thuc ap dung lich nay
 }
 
 model Admin {

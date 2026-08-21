@@ -20,7 +20,10 @@ const listQuerySchema = z.object({
 
 const classBodySchema = z.object({
   name: z.string().min(1),
+  tuitionFee: z.number().nonnegative(),
 });
+
+const classUpdateSchema = classBodySchema.partial();
 
 export async function listClassesHandler(req: Request, res: Response) {
   try {
@@ -56,8 +59,8 @@ export async function getClassByIdHandler(req: Request, res: Response) {
 
 export async function createClassHandler(req: Request, res: Response) {
   try {
-    const { name } = classBodySchema.parse(req.body);
-    const classRecord = await createClass(name);
+    const body = classBodySchema.parse(req.body);
+    const classRecord = await createClass(body);
     res.status(201).json({ success: true, data: classRecord, error: null });
   } catch (error) {
     console.log("createClassHandler failed", error);
@@ -71,8 +74,8 @@ export async function createClassHandler(req: Request, res: Response) {
 export async function updateClassHandler(req: Request, res: Response) {
   try {
     const { id } = idParamSchema.parse(req.params);
-    const { name } = classBodySchema.parse(req.body);
-    const classRecord = await updateClass(id, name);
+    const body = classUpdateSchema.parse(req.body);
+    const classRecord = await updateClass(id, body);
     res.json({ success: true, data: classRecord, error: null });
   } catch (error) {
     console.log("updateClassHandler failed", error);

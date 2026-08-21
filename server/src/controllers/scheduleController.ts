@@ -18,21 +18,37 @@ const listQuerySchema = z.object({
   classId: z.coerce.number().int().positive().optional(),
 });
 
-const scheduleBodySchema = z.object({
-  classId: z.number().int().positive(),
-  subjectId: z.number().int().positive(),
-  dayOfWeek: z.number().int().min(0).max(6),
-  startTime: z.string().regex(TIME_REGEX, "startTime must match HH:MM"),
-  endTime: z.string().regex(TIME_REGEX, "endTime must match HH:MM"),
-});
+const scheduleBodySchema = z
+  .object({
+    classId: z.number().int().positive(),
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: z.string().regex(TIME_REGEX, "startTime must match HH:MM"),
+    endTime: z.string().regex(TIME_REGEX, "endTime must match HH:MM"),
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+  })
+  .refine((data) => data.startDate <= data.endDate, {
+    message: "startDate must be before or equal to endDate",
+    path: ["endDate"],
+  });
 
-const scheduleUpdateSchema = z.object({
-  classId: z.number().int().positive().optional(),
-  subjectId: z.number().int().positive().optional(),
-  dayOfWeek: z.number().int().min(0).max(6).optional(),
-  startTime: z.string().regex(TIME_REGEX, "startTime must match HH:MM").optional(),
-  endTime: z.string().regex(TIME_REGEX, "endTime must match HH:MM").optional(),
-});
+const scheduleUpdateSchema = z
+  .object({
+    classId: z.number().int().positive().optional(),
+    dayOfWeek: z.number().int().min(0).max(6).optional(),
+    startTime: z.string().regex(TIME_REGEX, "startTime must match HH:MM").optional(),
+    endTime: z.string().regex(TIME_REGEX, "endTime must match HH:MM").optional(),
+    startDate: z.coerce.date().optional(),
+    endDate: z.coerce.date().optional(),
+  })
+  .refine(
+    (data) =>
+      !data.startDate || !data.endDate || data.startDate <= data.endDate,
+    {
+      message: "startDate must be before or equal to endDate",
+      path: ["endDate"],
+    }
+  );
 
 export async function listSchedulesHandler(req: Request, res: Response) {
   try {

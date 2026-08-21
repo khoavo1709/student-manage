@@ -1,14 +1,35 @@
 import { useState } from "react";
+import { Toast } from "../components/Toast";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
 type Tuition = {
   id: number;
   studentName: string;
-  amount: number;
+  className: string;
   year: number;
   month: number;
   status: "da dong" | "chua dong";
   paidDate: string | null;
 };
+
+// Demo tra cứu học phí theo lớp — thực tế sẽ lấy từ API classes (tuitionFee gắn theo lớp).
+const classFeeByName: Record<string, number> = {
+  "Toán lớp 6": 1500000,
+  "Lý lớp 7": 1800000,
+  "Anh lớp 9": 2000000,
+};
+
+// Demo cặp (học sinh, lớp) — 1 học sinh có thể học nhiều lớp nên mỗi cặp là 1 khoản phí riêng.
+const studentClassOptions = [
+  { studentName: "Nguyễn Văn An", className: "Toán lớp 6" },
+  { studentName: "Nguyễn Văn An", className: "Lý lớp 7" },
+  { studentName: "Trần Thị Bình", className: "Toán lớp 6" },
+  { studentName: "Lê Minh Đức", className: "Lý lớp 7" },
+];
+
+function optionKey(studentName: string, className: string) {
+  return `${studentName}|${className}`;
+}
 
 const statusLabels: Record<Tuition["status"], string> = {
   "da dong": "Đã đóng",
@@ -19,7 +40,7 @@ const demoTuitions: Tuition[] = [
   {
     id: 1,
     studentName: "Nguyễn Văn An",
-    amount: 1500000,
+    className: "Toán lớp 6",
     year: 2026,
     month: 8,
     status: "da dong",
@@ -28,7 +49,7 @@ const demoTuitions: Tuition[] = [
   {
     id: 2,
     studentName: "Trần Thị Bình",
-    amount: 1500000,
+    className: "Toán lớp 6",
     year: 2026,
     month: 8,
     status: "chua dong",
@@ -37,7 +58,7 @@ const demoTuitions: Tuition[] = [
   {
     id: 3,
     studentName: "Lê Minh Đức",
-    amount: 1800000,
+    className: "Lý lớp 7",
     year: 2026,
     month: 8,
     status: "chua dong",
@@ -53,7 +74,9 @@ export default function TuitionsPage() {
   const [tuitions, setTuitions] = useState<Tuition[]>(demoTuitions);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  useLockBodyScroll(showForm);
   const [editingTuition, setEditingTuition] = useState<Tuition | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const filteredTuitions = tuitions.filter((item) =>
     item.studentName.toLowerCase().includes(search.toLowerCase())
@@ -71,6 +94,8 @@ export default function TuitionsPage() {
     if (!confirmed) return;
 
     setTuitions((current) => current.filter((item) => item.id !== id));
+
+    setToastMessage(`Xóa học phí của "${tuition.studentName}" thành công.`);
   };
 
   const handleEdit = (tuition: Tuition) => {
@@ -88,20 +113,17 @@ export default function TuitionsPage() {
 
     const formData = new FormData(event.currentTarget);
 
-    const studentName = String(formData.get("studentName") || "");
-    const amount = Number(formData.get("amount"));
+    const studentClassKey = String(formData.get("studentClassKey") || "");
     const year = Number(formData.get("year"));
     const month = Number(formData.get("month"));
     const status = String(formData.get("status") || "") as Tuition["status"];
     const paidDate = String(formData.get("paidDate") || "") || null;
 
-    if (
-      !studentName ||
-      !amount ||
-      !year ||
-      !month ||
-      !status
-    ) {
+    const studentOption = studentClassOptions.find(
+      (item) => optionKey(item.studentName, item.className) === studentClassKey
+    );
+
+    if (!studentOption || !year || !month || !status) {
       alert("Vui lòng nhập đầy đủ các thông tin bắt buộc.");
       return;
     }
@@ -111,16 +133,19 @@ export default function TuitionsPage() {
       return;
     }
 
+    const { studentName, className } = studentOption;
+
     const isDuplicate = tuitions.some(
       (item) =>
         item.studentName === studentName &&
+        item.className === className &&
         item.year === year &&
         item.month === month &&
         item.id !== editingTuition?.id
     );
 
     if (isDuplicate) {
-      alert("Học sinh này đã có bản ghi học phí cho tháng/năm này.");
+      alert("Học sinh này đã có bản ghi học phí lớp này cho tháng/năm này.");
       return;
     }
 
@@ -131,7 +156,7 @@ export default function TuitionsPage() {
             ? {
                 ...item,
                 studentName,
-                amount,
+                className,
                 year,
                 month,
                 status,
@@ -140,11 +165,13 @@ export default function TuitionsPage() {
             : item
         )
       );
+
+      setToastMessage(`Cập nhật học phí của "${studentName}" thành công.`);
     } else {
       const newTuition: Tuition = {
         id: Date.now(),
         studentName,
-        amount,
+        className,
         year,
         month,
         status,
@@ -152,6 +179,8 @@ export default function TuitionsPage() {
       };
 
       setTuitions((current) => [...current, newTuition]);
+
+      setToastMessage(`Thêm học phí cho "${studentName}" thành công.`);
     }
 
     handleCloseForm();
@@ -159,13 +188,17 @@ export default function TuitionsPage() {
 
   return (
     <div className="space-y-6">
+      {toastMessage && (
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Học phí</h1>
 
           <p className="mt-1 text-sm text-gray-500">
-            Quản lý học phí theo tháng
+            Theo dõi đóng học phí theo tháng — số tiền lấy theo mức học phí của lớp
           </p>
         </div>
 
@@ -215,6 +248,10 @@ export default function TuitionsPage() {
                 </th>
 
                 <th className="px-4 py-3 font-semibold text-gray-600">
+                  Lớp
+                </th>
+
+                <th className="px-4 py-3 font-semibold text-gray-600">
                   Tháng/Năm
                 </th>
 
@@ -240,7 +277,7 @@ export default function TuitionsPage() {
               {filteredTuitions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-10 text-center text-gray-500"
                   >
                     Không tìm thấy bản ghi học phí.
@@ -257,12 +294,18 @@ export default function TuitionsPage() {
                       </div>
                     </td>
 
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                        {tuition.className}
+                      </span>
+                    </td>
+
                     <td className="px-4 py-3 text-gray-600">
                       {tuition.month}/{tuition.year}
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {formatCurrency(tuition.amount)}
+                      {formatCurrency(classFeeByName[tuition.className] ?? 0)}
                     </td>
 
                     <td className="px-4 py-3">
@@ -324,7 +367,7 @@ export default function TuitionsPage() {
                 </h2>
 
                 <p className="mt-1 text-xs text-gray-500">
-                  Nhập thông tin học phí
+                  Số tiền tự động lấy theo mức học phí của lớp học sinh
                 </p>
               </div>
 
@@ -342,30 +385,31 @@ export default function TuitionsPage() {
               <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
                 <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Học sinh <span className="text-red-500">*</span>
+                    Học sinh - Lớp <span className="text-red-500">*</span>
                   </label>
 
-                  <input
-                    name="studentName"
-                    defaultValue={editingTuition?.studentName || ""}
-                    placeholder="Nguyễn Văn A"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Số tiền <span className="text-red-500">*</span>
-                  </label>
-
-                  <input
-                    type="number"
-                    name="amount"
-                    min={0}
-                    defaultValue={editingTuition?.amount ?? ""}
-                    placeholder="1500000"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
+                  <select
+                    name="studentClassKey"
+                    defaultValue={
+                      editingTuition
+                        ? optionKey(
+                            editingTuition.studentName,
+                            editingTuition.className
+                          )
+                        : ""
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Chọn học sinh - lớp</option>
+                    {studentClassOptions.map((item) => (
+                      <option
+                        key={optionKey(item.studentName, item.className)}
+                        value={optionKey(item.studentName, item.className)}
+                      >
+                        {item.studentName} ({item.className})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>

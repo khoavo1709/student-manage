@@ -7,13 +7,20 @@ export interface ListStudentsParams {
   classId?: number;
 }
 
+const studentInclude = {
+  classes: { include: { class: true } },
+} as const;
+
 export async function listStudents(params: ListStudentsParams) {
   const { page, limit, classId } = params;
-  const where: Prisma.StudentWhereInput = classId ? { classId } : {};
+  const where: Prisma.StudentWhereInput = classId
+    ? { classes: { some: { classId } } }
+    : {};
 
   const [students, total] = await Promise.all([
     prisma.student.findMany({
       where,
+      include: studentInclude,
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { id: "asc" },
@@ -30,7 +37,7 @@ export async function listStudents(params: ListStudentsParams) {
 export async function getStudentById(id: number) {
   const student = await prisma.student.findUnique({
     where: { id },
-    include: { class: { select: { id: true, name: true } } },
+    include: studentInclude,
   });
   if (!student) {
     throw new Error("Student not found");
@@ -38,13 +45,47 @@ export async function getStudentById(id: number) {
   return student;
 }
 
-export async function createStudent(data: Prisma.StudentUncheckedCreateInput) {
-  return prisma.student.create({ data });
+export interface StudentInput {
+  fullName: string;
+  dateOfBirth: Date;
+  gender: string;
+  address?: string | null;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  guardianRelation?: string | null;
+  classIds?: number[];
 }
 
-export async function updateStudent(id: number, data: Prisma.StudentUncheckedUpdateInput) {
+export async function createStudent(data: StudentInput) {
+  const { classIds = [], ...studentData } = data;
+  return prisma.student.create({
+    data: {
+      ...studentData,
+      classes: { create: classIds.map((classId) => ({ classId })) },
+    },
+    include: studentInclude,
+  });
+}
+
+export async function updateStudent(id: number, data: Partial<StudentInput>) {
   await getStudentById(id);
-  return prisma.student.update({ where: { id }, data });
+  const { classIds, ...studentData } = data;
+
+  return prisma.student.update({
+    where: { id },
+    data: {
+      ...studentData,
+      ...(classIds
+        ? {
+            classes: {
+              deleteMany: {},
+              create: classIds.map((classId) => ({ classId })),
+            },
+          }
+        : {}),
+    },
+    include: studentInclude,
+  });
 }
 
 export async function deleteStudent(id: number) {
