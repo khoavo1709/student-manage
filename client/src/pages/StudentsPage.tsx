@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Toast } from "../components/Toast";
 
 type Student = {
   id: number;
@@ -45,6 +46,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const filteredStudents = students.filter((student) =>
     student.fullName.toLowerCase().includes(search.toLowerCase())
@@ -64,6 +66,8 @@ export default function StudentsPage() {
     setStudents((current) =>
       current.filter((student) => student.id !== id)
     );
+
+    setToastMessage(`Xóa học sinh "${student.fullName}" thành công.`);
   };
 
   const handleEdit = (student: Student) => {
@@ -109,6 +113,8 @@ export default function StudentsPage() {
             : student
         )
       );
+
+      setToastMessage(`Cập nhật học sinh "${fullName}" thành công.`);
     } else {
       const newStudent: Student = {
         id: Date.now(),
@@ -121,6 +127,8 @@ export default function StudentsPage() {
       };
 
       setStudents((current) => [...current, newStudent]);
+
+      setToastMessage(`Thêm học sinh "${fullName}" thành công.`);
     }
 
     handleCloseForm();
@@ -128,6 +136,13 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          onClose={() => setToastMessage(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
