@@ -1,19 +1,97 @@
-const classScoreReport = [
-  { className: "Toán lớp 6", studentName: "Nguyễn Văn An", averageScore: 8.75 },
-  { className: "Toán lớp 6", studentName: "Trần Thị Bình", averageScore: 7.0 },
-  { className: "Lý lớp 7", studentName: "Lê Minh Đức", averageScore: 6.8 },
-];
-
-const tuitionReport = [
-  { month: 8, year: 2026, totalCollected: 1500000, totalPending: 3300000 },
-  { month: 7, year: 2026, totalCollected: 4800000, totalPending: 0 },
-];
+import { useApiData } from "../hooks/useApiData";
+import {
+  classApi,
+  scheduleApi,
+  scoreApi,
+  studentApi,
+  tuitionApi,
+  type Score,
+} from "../services/api";
+import { buildTuitionRows, type TuitionRow } from "../utils/tuition";
 
 function formatCurrency(amount: number) {
   return amount.toLocaleString("vi-VN") + " đ";
 }
 
+// Diem trung binh theo tung cap (hoc sinh, lop).
+function buildClassScoreReport(scores: Score[]) {
+  const groups = new Map<string, { className: string; studentName: string; total: number; count: number }>();
+  for (const score of scores) {
+    const key = `${score.studentId}-${score.classId}`;
+    const group = groups.get(key) ?? {
+      className: score.className,
+      studentName: score.studentName,
+      total: 0,
+      count: 0,
+    };
+    group.total += score.value;
+    group.count += 1;
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map(({ className, studentName, total, count }) => ({
+      className,
+      studentName,
+      averageScore: total / count,
+    }))
+    .sort(
+      (a, b) =>
+        a.className.localeCompare(b.className, "vi") ||
+        a.studentName.localeCompare(b.studentName, "vi")
+    );
+}
+
+// Tong da thu / chua thu theo thang, thang moi nhat len dau.
+function buildTuitionReport(tuitions: TuitionRow[]) {
+  const groups = new Map<string, { month: number; year: number; totalCollected: number; totalPending: number }>();
+  for (const tuition of tuitions) {
+    const key = `${tuition.year}-${tuition.month}`;
+    const group = groups.get(key) ?? {
+      month: tuition.month,
+      year: tuition.year,
+      totalCollected: 0,
+      totalPending: 0,
+    };
+    if (tuition.status === "da dong") {
+      group.totalCollected += tuition.tuitionFee;
+    } else {
+      group.totalPending += tuition.tuitionFee;
+    }
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.year - a.year || b.month - a.month);
+}
+
 export default function ReportsPage() {
+  const scores = useApiData<Score[]>(scoreApi.list, []);
+  const tuitionRecords = useApiData(tuitionApi.list, []);
+  const students = useApiData(studentApi.list, []);
+  const classes = useApiData(classApi.list, []);
+  const schedules = useApiData(scheduleApi.list, []);
+  // Gộp trạng thái tải của 4 nguồn để hiện 1 dòng loading/lỗi cho bảng học phí.
+  const tuitionSources = [tuitionRecords, students, classes, schedules];
+  const tuitions = {
+    loading: tuitionSources.some((source) => source.loading),
+    error: tuitionSources.find((source) => source.error)?.error ?? null,
+    data: buildTuitionRows(students.data, classes.data, schedules.data, tuitionRecords.data),
+  };
+  const classScoreReport = buildClassScoreReport(scores.data);
+  const tuitionReport = buildTuitionReport(tuitions.data);
+
+  const statusRow = (source: { loading: boolean; error: string | null }) =>
+    source.loading || source.error ? (
+      <tr>
+        <td
+          colSpan={3}
+          className={`px-4 py-10 text-center ${source.error ? "text-red-600" : "text-gray-500"}`}
+        >
+          {source.error
+            ? `Không tải được dữ liệu: ${source.error}`
+            : "Đang tải dữ liệu..."}
+        </td>
+      </tr>
+    ) : null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -49,7 +127,7 @@ export default function ReportsPage() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {classScoreReport.length === 0 ? (
+              {statusRow(scores) ?? (classScoreReport.length === 0 ? (
                 <tr>
                   <td
                     colSpan={3}
@@ -79,7 +157,7 @@ export default function ReportsPage() {
                     </td>
                   </tr>
                 ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
@@ -112,7 +190,7 @@ export default function ReportsPage() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {tuitionReport.length === 0 ? (
+              {statusRow(tuitions) ?? (tuitionReport.length === 0 ? (
                 <tr>
                   <td
                     colSpan={3}
@@ -137,7 +215,7 @@ export default function ReportsPage() {
                     </td>
                   </tr>
                 ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>

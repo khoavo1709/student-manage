@@ -1,20 +1,18 @@
-const summaryCards = [
-  { label: "Tổng học sinh", value: 3, accent: "text-blue-600" },
-  { label: "Tổng lớp học", value: 3, accent: "text-emerald-600" },
-  { label: "Điểm đã nhập", value: 3, accent: "text-purple-600" },
-  { label: "Học phí chưa thu", value: 2, accent: "text-amber-600" },
-];
-
-// Demo: ghi chú lấy từ note của đợt điểm gần nhất theo học sinh (nguồn: trang Điểm số).
-const recentScoreNotes = [
-  {
-    id: 1,
-    studentName: "Nguyễn Văn An",
-    examName: "Đợt 2",
-    note: "Tiến bộ rõ rệt",
-    date: "2026-08-19",
-  },
-];
+import { useApiData } from "../hooks/useApiData";
+import {
+  classApi,
+  scheduleApi,
+  scoreApi,
+  studentApi,
+  tuitionApi,
+  type ClassItem,
+  type Schedule,
+  type Score,
+  type Student,
+  type Tuition,
+} from "../services/api";
+import { formatDateVN } from "../utils/date";
+import { buildTuitionRows, monthKey } from "../utils/tuition";
 
 const dayOfWeekLabels = [
   "Chủ nhật",
@@ -26,12 +24,77 @@ const dayOfWeekLabels = [
   "Thứ 7",
 ];
 
-const upcomingSchedules = [
-  { id: 1, className: "Toán lớp 6", dayOfWeek: 2, startTime: "07:30", endTime: "09:00" },
-  { id: 2, className: "Lý lớp 7", dayOfWeek: 3, startTime: "13:30", endTime: "15:00" },
-];
+const UPCOMING_LIMIT = 5;
+
+function currentMonthKey() {
+  const now = new Date();
+  return monthKey({ year: now.getFullYear(), month: now.getMonth() + 1 });
+}
+
+function todayIso() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+// Ghi chu cua dot kiem tra gan nhat (co ghi chu) theo tung hoc sinh.
+function getRecentScoreNotes(scores: Score[]) {
+  const latestByStudent = new Map<number, Score>();
+  for (const score of scores) {
+    if (!score.note) continue;
+    const current = latestByStudent.get(score.studentId);
+    if (!current || score.date > current.date) {
+      latestByStudent.set(score.studentId, score);
+    }
+  }
+  return [...latestByStudent.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// Lich dang con hieu luc, sap theo ngay gan nhat tinh tu hom nay roi theo gio bat dau.
+function getUpcomingSchedules(schedules: Schedule[], classes: ClassItem[]) {
+  const today = todayIso();
+  const todayDay = new Date().getDay();
+  const classNameById = new Map(classes.map((item) => [item.id, item.name]));
+
+  return schedules
+    .filter((item) => item.startDate <= today && item.endDate >= today)
+    .map((item) => ({
+      ...item,
+      className: classNameById.get(item.classId) ?? "-",
+      daysAway: (item.dayOfWeek - todayDay + 7) % 7,
+    }))
+    .sort((a, b) => a.daysAway - b.daysAway || a.startTime.localeCompare(b.startTime))
+    .slice(0, UPCOMING_LIMIT);
+}
 
 export default function DashboardPage() {
+  const students = useApiData<Student[]>(studentApi.list, []);
+  const classes = useApiData<ClassItem[]>(classApi.list, []);
+  const scores = useApiData<Score[]>(scoreApi.list, []);
+  const tuitions = useApiData<Tuition[]>(tuitionApi.list, []);
+  const schedules = useApiData<Schedule[]>(scheduleApi.list, []);
+
+  const sources = [students, classes, scores, tuitions, schedules];
+  const loading = sources.some((source) => source.loading);
+  const loadError = sources.find((source) => source.error)?.error ?? null;
+
+  const summaryCards = [
+    { label: "Tổng học sinh", value: students.data.length, accent: "text-blue-600" },
+    { label: "Tổng lớp học", value: classes.data.length, accent: "text-emerald-600" },
+    { label: "Điểm đã nhập", value: scores.data.length, accent: "text-purple-600" },
+    {
+      // Chỉ tính các tháng đã đến hạn (tới tháng hiện tại), không tính tháng tương lai.
+      label: "Học phí chưa thu",
+      value: buildTuitionRows(students.data, classes.data, schedules.data, tuitions.data).filter(
+        (row) => row.status === "chua dong" && monthKey(row) <= currentMonthKey()
+      ).length,
+      accent: "text-amber-600",
+    },
+  ];
+  const recentScoreNotes = getRecentScoreNotes(scores.data);
+  const upcomingSchedules = getUpcomingSchedules(schedules.data, classes.data);
+
   return (
     <div className="space-y-6">
       <div>
@@ -41,6 +104,12 @@ export default function DashboardPage() {
           Thống kê nhanh về tình hình lớp học
         </p>
       </div>
+
+      {loadError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Không tải được dữ liệu: {loadError}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -52,7 +121,7 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-500">{card.label}</p>
 
             <p className={`mt-2 text-3xl font-semibold ${card.accent}`}>
-              {card.value}
+              {loading ? "…" : card.value}
             </p>
           </div>
         ))}
@@ -87,11 +156,16 @@ export default function DashboardPage() {
                     </span>
 
                     <span className="text-xs text-gray-500">
-                      {new Date(item.date).toLocaleDateString("vi-VN")}
+                      {formatDateVN(item.date)}
                     </span>
                   </div>
 
-                  <p className="mt-1 text-sm text-gray-600">{item.note}</p>
+                  <p
+                    title={item.note}
+                    className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-600"
+                  >
+                    {item.note}
+                  </p>
                 </div>
               ))
             )}

@@ -1,66 +1,37 @@
 import { useState } from "react";
 import { Toast } from "../components/Toast";
+import { MissingScheduleNotice } from "../components/MissingScheduleNotice";
 import { MultiSelectFilter } from "../components/MultiSelectFilter";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
-
-type Student = {
-  id: number;
-  fullName: string;
-  dateOfBirth: string;
-  gender: string;
-  address: string;
-  classNames: string[];
-  guardianName: string;
-  guardianPhone: string;
-  guardianRelation: string;
-};
-
-const availableClasses = [
-  "Toán lớp 3",
-  "Toán lớp 6",
-  "Lý lớp 7",
-  "Văn lớp 8",
-  "Anh lớp 9",
-];
-
-const demoStudents: Student[] = [
-  {
-    id: 1,
-    fullName: "Nguyễn Văn An",
-    dateOfBirth: "2012-03-15",
-    gender: "Nam",
-    address: "Ninh Bình",
-    classNames: ["Toán lớp 6", "Lý lớp 7"],
-    guardianName: "Nguyễn Văn Bình",
-    guardianPhone: "0912000001",
-    guardianRelation: "Bố",
-  },
-  {
-    id: 2,
-    fullName: "Trần Thị Bình",
-    dateOfBirth: "2012-07-22",
-    gender: "Nữ",
-    address: "Ninh Bình",
-    classNames: ["Toán lớp 6"],
-    guardianName: "Trần Thị Hoa",
-    guardianPhone: "0987000002",
-    guardianRelation: "Mẹ",
-  },
-  {
-    id: 3,
-    fullName: "Lê Minh Đức",
-    dateOfBirth: "2011-11-08",
-    gender: "Nam",
-    address: "Ninh Bình",
-    classNames: ["Lý lớp 7"],
-    guardianName: "Lê Văn Hùng",
-    guardianPhone: "0901000003",
-    guardianRelation: "Bố",
-  },
-];
+import { useApiData } from "../hooks/useApiData";
+import {
+  classApi,
+  getErrorMessage,
+  scheduleApi,
+  studentApi,
+  type ClassItem,
+  type Student,
+  type StudentInput,
+} from "../services/api";
+import { formatDateVN } from "../utils/date";
 
 export default function StudentsPage() {
-  const [students, setStudents] = useState<Student[]>(demoStudents);
+  const {
+    data: students,
+    setData: setStudents,
+    loading,
+    error: loadError,
+  } = useApiData<Student[]>(studentApi.list, []);
+  const { data: classes } = useApiData<ClassItem[]>(classApi.list, []);
+  const availableClasses = classes.map((item) => item.name);
+  const { data: schedules } = useApiData(scheduleApi.list, []);
+  const scheduledClassIds = new Set(schedules.map((item) => item.classId));
+  // Lớp đang được tick trong form, để nhắc nếu lớp chưa có lịch học.
+  const [formClassIds, setFormClassIds] = useState<number[]>([]);
+  const checkedClassesMissingSchedule = classes
+    .filter((item) => formClassIds.includes(item.id) && !scheduledClassIds.has(item.id))
+    .map((item) => item.name);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [classFilters, setClassFilters] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -85,26 +56,32 @@ export default function StudentsPage() {
     setClassFilters([]);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     const student = students.find((item) => item.id === id);
 
     if (!student) return;
 
     const confirmed = window.confirm(
-      `Bạn có chắc muốn xóa học sinh "${student.fullName}" không?`
+      `Bạn có chắc muốn xóa học sinh "${student.fullName}" không? Điểm số và học phí của học sinh này cũng sẽ bị xóa.`
     );
 
     if (!confirmed) return;
 
-    setStudents((current) =>
-      current.filter((student) => student.id !== id)
-    );
-
-    setToastMessage(`Xóa học sinh "${student.fullName}" thành công.`);
+    try {
+      await studentApi.remove(id);
+      setStudents((current) =>
+        current.filter((student) => student.id !== id)
+      );
+      setToastMessage(`Xóa học sinh "${student.fullName}" thành công.`);
+    } catch (error) {
+      console.log("Delete student failed", id, error);
+      alert(`Xóa học sinh thất bại: ${getErrorMessage(error)}`);
+    }
   };
 
   const handleEdit = (student: Student) => {
     setEditingStudent(student);
+    setFormClassIds(student.classIds);
     setShowForm(true);
   };
 
@@ -113,64 +90,49 @@ export default function StudentsPage() {
     setEditingStudent(null);
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
 
-    const fullName = String(formData.get("fullName") || "");
-    const dateOfBirth = String(formData.get("dateOfBirth") || "");
-    const gender = String(formData.get("gender") || "");
-    const address = String(formData.get("address") || "");
-    const classNames = formData.getAll("classNames").map(String);
-    const guardianName = String(formData.get("guardianName") || "");
-    const guardianPhone = String(formData.get("guardianPhone") || "");
-    const guardianRelation = String(formData.get("guardianRelation") || "");
+    const input: StudentInput = {
+      fullName: String(formData.get("fullName") || "").trim(),
+      dateOfBirth: String(formData.get("dateOfBirth") || ""),
+      gender: String(formData.get("gender") || ""),
+      address: String(formData.get("address") || ""),
+      classIds: formData.getAll("classIds").map(Number),
+      guardianName: String(formData.get("guardianName") || ""),
+      guardianPhone: String(formData.get("guardianPhone") || ""),
+      guardianRelation: String(formData.get("guardianRelation") || ""),
+    };
 
-    if (!fullName || !dateOfBirth || !gender || classNames.length === 0) {
+    if (!input.fullName || !input.dateOfBirth || !input.gender || input.classIds.length === 0) {
       alert("Vui lòng nhập đầy đủ các thông tin bắt buộc (chọn ít nhất 1 lớp).");
       return;
     }
 
-    if (editingStudent) {
-      setStudents((current) =>
-        current.map((student) =>
-          student.id === editingStudent.id
-            ? {
-                ...student,
-                fullName,
-                dateOfBirth,
-                gender,
-                address,
-                classNames,
-                guardianName,
-                guardianPhone,
-                guardianRelation,
-              }
-            : student
-        )
-      );
-
-      setToastMessage(`Cập nhật học sinh "${fullName}" thành công.`);
-    } else {
-      const newStudent: Student = {
-        id: Date.now(),
-        fullName,
-        dateOfBirth,
-        gender,
-        address,
-        classNames,
-        guardianName,
-        guardianPhone,
-        guardianRelation,
-      };
-
-      setStudents((current) => [...current, newStudent]);
-
-      setToastMessage(`Thêm học sinh "${fullName}" thành công.`);
+    setSaving(true);
+    try {
+      if (editingStudent) {
+        const updated = await studentApi.update(editingStudent.id, input);
+        setStudents((current) =>
+          current.map((student) =>
+            student.id === updated.id ? updated : student
+          )
+        );
+        setToastMessage(`Cập nhật học sinh "${updated.fullName}" thành công.`);
+      } else {
+        const created = await studentApi.create(input);
+        setStudents((current) => [...current, created]);
+        setToastMessage(`Thêm học sinh "${created.fullName}" thành công.`);
+      }
+      handleCloseForm();
+    } catch (error) {
+      console.log("Save student failed", input, error);
+      alert(`Lưu học sinh thất bại: ${getErrorMessage(error)}`);
+    } finally {
+      setSaving(false);
     }
-
-    handleCloseForm();
   };
 
   return (
@@ -198,6 +160,7 @@ export default function StudentsPage() {
           type="button"
           onClick={() => {
             setEditingStudent(null);
+            setFormClassIds([]);
             setShowForm(true);
           }}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -319,7 +282,18 @@ export default function StudentsPage() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {filteredStudents.length === 0 ? (
+              {loading || loadError ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className={`px-4 py-10 text-center ${loadError ? "text-red-600" : "text-gray-500"}`}
+                  >
+                    {loadError
+                      ? `Không tải được dữ liệu: ${loadError}`
+                      : "Đang tải dữ liệu..."}
+                  </td>
+                </tr>
+              ) : filteredStudents.length === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
@@ -345,9 +319,7 @@ export default function StudentsPage() {
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {new Date(student.dateOfBirth).toLocaleDateString(
-                        "vi-VN"
-                      )}
+                      {formatDateVN(student.dateOfBirth)}
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
@@ -499,23 +471,47 @@ export default function StudentsPage() {
                   </label>
 
                   <div className="flex flex-wrap gap-3 rounded-lg border border-gray-300 px-3 py-2">
-                    {availableClasses.map((className) => (
+                    {classes.length === 0 && (
+                      <span className="text-sm text-gray-400">
+                        Chưa có lớp nào, hãy tạo lớp trước.
+                      </span>
+                    )}
+                    {classes.map((classItem) => (
                       <label
-                        key={className}
+                        key={classItem.id}
                         className="flex items-center gap-1.5 text-sm text-gray-700"
                       >
                         <input
                           type="checkbox"
-                          name="classNames"
-                          value={className}
-                          defaultChecked={editingStudent?.classNames.includes(
-                            className
+                          name="classIds"
+                          value={classItem.id}
+                          defaultChecked={editingStudent?.classIds.includes(
+                            classItem.id
                           )}
+                          onChange={(event) =>
+                            setFormClassIds((current) =>
+                              event.target.checked
+                                ? [...current, classItem.id]
+                                : current.filter((id) => id !== classItem.id)
+                            )
+                          }
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
-                        {className}
+                        {classItem.name}
+                        {!scheduledClassIds.has(classItem.id) && (
+                          <span className="text-xs text-amber-600">
+                            (chưa có lịch)
+                          </span>
+                        )}
                       </label>
                     ))}
+                  </div>
+
+                  <div className="mt-2">
+                    <MissingScheduleNotice
+                      classNames={checkedClassesMissingSchedule}
+                      message="Lớp chưa có lịch học nên chưa tính được học phí cho học sinh này"
+                    />
                   </div>
                 </div>
 
@@ -596,9 +592,14 @@ export default function StudentsPage() {
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  disabled={saving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {editingStudent ? "Lưu thay đổi" : "Thêm học sinh"}
+                  {saving
+                    ? "Đang lưu..."
+                    : editingStudent
+                      ? "Lưu thay đổi"
+                      : "Thêm học sinh"}
                 </button>
               </div>
             </form>

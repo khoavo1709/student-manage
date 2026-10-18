@@ -28,12 +28,12 @@ export async function getScoreById(id: number) {
 }
 
 export async function createScore(data: Prisma.ScoreUncheckedCreateInput) {
-  return prisma.score.create({ data });
+  return prisma.score.create({ data, include: scoreInclude });
 }
 
 export async function updateScore(id: number, data: Prisma.ScoreUncheckedUpdateInput) {
   await getScoreById(id);
-  return prisma.score.update({ where: { id }, data });
+  return prisma.score.update({ where: { id }, data, include: scoreInclude });
 }
 
 export async function deleteScore(id: number) {

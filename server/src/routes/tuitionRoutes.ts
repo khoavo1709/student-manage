@@ -5,6 +5,7 @@ import {
   deleteTuitionHandler,
   getTuitionByIdHandler,
   listTuitionsHandler,
+  payTuitionsHandler,
   updateTuitionHandler,
 } from "../controllers/tuitionController";
 
@@ -15,6 +16,7 @@ router.use(requireAuth);
 router.get("/", listTuitionsHandler);
 router.get("/:id", getTuitionByIdHandler);
 router.post("/", createTuitionHandler);
+router.post("/pay", payTuitionsHandler);
 router.put("/:id", updateTuitionHandler);
 router.delete("/:id", deleteTuitionHandler);
 

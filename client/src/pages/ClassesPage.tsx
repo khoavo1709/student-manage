@@ -1,30 +1,27 @@
 import { useState } from "react";
 import { MultiSelectFilter } from "../components/MultiSelectFilter";
+import { useApiData } from "../hooks/useApiData";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { classApi, getErrorMessage, type ClassItem } from "../services/api";
 
-type Class = {
-  id: number;
-  name: string;
-  tuitionFee: number;
-  studentCount: number;
-};
-
-const demoClasses: Class[] = [
-  { id: 1, name: "Toán lớp 6", tuitionFee: 1500000, studentCount: 2 },
-  { id: 2, name: "Lý lớp 7", tuitionFee: 1800000, studentCount: 1 },
-  { id: 3, name: "Anh lớp 9", tuitionFee: 2000000, studentCount: 0 },
-];
+type Class = ClassItem;
 
 function formatCurrency(amount: number) {
   return amount.toLocaleString("vi-VN") + " đ";
 }
 
 export default function ClassesPage() {
-  const [classes, setClasses] = useState<Class[]>(demoClasses);
+  const {
+    data: classes,
+    setData: setClasses,
+    loading,
+    error,
+  } = useApiData<Class[]>(classApi.list, []);
   const [classFilters, setClassFilters] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   useLockBodyScroll(showForm);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const filteredClasses = classes.filter(
     (item) => classFilters.length === 0 || classFilters.includes(item.name)
@@ -36,18 +33,24 @@ export default function ClassesPage() {
     setClassFilters([]);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     const classItem = classes.find((item) => item.id === id);
 
     if (!classItem) return;
 
     const confirmed = window.confirm(
-      `Bạn có chắc muốn xóa lớp "${classItem.name}" không?`
+      `Bạn có chắc muốn xóa lớp "${classItem.name}" không?\n\nLưu ý: Toàn bộ lịch học, điểm số, học phí và danh sách học sinh đăng ký của lớp này cũng sẽ bị xóa vĩnh viễn.`
     );
 
     if (!confirmed) return;
 
-    setClasses((current) => current.filter((item) => item.id !== id));
+    try {
+      await classApi.remove(id);
+      setClasses((current) => current.filter((item) => item.id !== id));
+    } catch (err) {
+      console.log(`Delete class ${id} failed`, err);
+      alert(`Xóa lớp học thất bại: ${getErrorMessage(err)}`);
+    }
   };
 
   const handleEdit = (classItem: Class) => {
@@ -60,15 +63,16 @@ export default function ClassesPage() {
     setEditingClass(null);
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
 
-    const name = String(formData.get("name") || "");
-    const tuitionFee = Number(formData.get("tuitionFee"));
+    const name = String(formData.get("name") || "").trim();
+    const tuitionFeeRaw = String(formData.get("tuitionFee") ?? "");
+    const tuitionFee = Number(tuitionFeeRaw);
 
-    if (!name || Number.isNaN(tuitionFee)) {
+    if (!name || !tuitionFeeRaw || Number.isNaN(tuitionFee)) {
       alert("Vui lòng nhập đầy đủ các thông tin bắt buộc.");
       return;
     }
@@ -78,30 +82,41 @@ export default function ClassesPage() {
       return;
     }
 
-    if (editingClass) {
-      setClasses((current) =>
-        current.map((item) =>
-          item.id === editingClass.id
-            ? {
-                ...item,
-                name,
-                tuitionFee,
-              }
-            : item
-        )
+    setSaving(true);
+
+    try {
+      if (editingClass) {
+        const updated = await classApi.update(editingClass.id, {
+          name,
+          tuitionFee,
+        });
+
+        // Response cap nhat khong kem danh sach hoc sinh nen giu si so cu.
+        setClasses((current) =>
+          current.map((item) =>
+            item.id === editingClass.id
+              ? { ...updated, studentCount: item.studentCount }
+              : item
+          )
+        );
+      } else {
+        const created = await classApi.create({ name, tuitionFee });
+
+        setClasses((current) => [...current, created]);
+      }
+
+      handleCloseForm();
+    } catch (err) {
+      console.log(
+        editingClass
+          ? `Update class ${editingClass.id} failed`
+          : "Create class failed",
+        err
       );
-    } else {
-      const newClass: Class = {
-        id: Date.now(),
-        name,
-        tuitionFee,
-        studentCount: 0,
-      };
-
-      setClasses((current) => [...current, newClass]);
+      alert(`Lưu lớp học thất bại: ${getErrorMessage(err)}`);
+    } finally {
+      setSaving(false);
     }
-
-    handleCloseForm();
   };
 
   return (
@@ -198,7 +213,25 @@ export default function ClassesPage() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {filteredClasses.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-10 text-center text-gray-500"
+                  >
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-10 text-center text-red-600"
+                  >
+                    Không thể tải danh sách lớp học: {error}
+                  </td>
+                </tr>
+              ) : filteredClasses.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -240,7 +273,7 @@ export default function ClassesPage() {
 
                         <button
                           type="button"
-                          onClick={() => handleDelete(classItem.id)}
+                          onClick={() => void handleDelete(classItem.id)}
                           className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
                         >
                           Xóa
@@ -325,9 +358,14 @@ export default function ClassesPage() {
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  disabled={saving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {editingClass ? "Lưu thay đổi" : "Thêm lớp học"}
+                  {saving
+                    ? "Đang lưu..."
+                    : editingClass
+                      ? "Lưu thay đổi"
+                      : "Thêm lớp học"}
                 </button>
               </div>
             </form>

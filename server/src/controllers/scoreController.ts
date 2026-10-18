@@ -21,7 +21,7 @@ const scoreBodySchema = z.object({
   studentId: z.number().int().positive(),
   classId: z.number().int().positive(),
   examName: z.string().min(1),
-  value: z.number(),
+  value: z.number().min(0).max(10),
   date: z.coerce.date(),
   note: z.string().optional().nullable(),
 });

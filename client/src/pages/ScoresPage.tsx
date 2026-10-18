@@ -4,53 +4,19 @@ import { Toast } from "../components/Toast";
 import { ColumnFilterHeader } from "../components/ColumnFilterHeader";
 import { ExcelActionsMenu } from "../components/ExcelActionsMenu";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useApiData } from "../hooks/useApiData";
+import {
+  classApi,
+  getErrorMessage,
+  scoreApi,
+  studentApi,
+  type Score,
+  type ScoreInput,
+} from "../services/api";
+import { formatDateVN } from "../utils/date";
+import { writeExcelWithBoldHeader } from "../utils/excel";
 
-type Score = {
-  id: number;
-  studentName: string;
-  className: string;
-  examName: string;
-  value: number;
-  date: string;
-  note: string;
-};
-
-// Demo tra cứu lớp mà mỗi học sinh đang học — 1 học sinh có thể học nhiều lớp.
-const studentClassOptions: Record<string, string[]> = {
-  "Nguyễn Văn An": ["Toán lớp 6", "Lý lớp 7"],
-  "Trần Thị Bình": ["Toán lớp 6"],
-  "Lê Minh Đức": ["Lý lớp 7"],
-};
-
-const demoScores: Score[] = [
-  {
-    id: 1,
-    studentName: "Nguyễn Văn An",
-    className: "Toán lớp 6",
-    examName: "Đợt 1",
-    value: 8,
-    date: "2026-08-05",
-    note: "",
-  },
-  {
-    id: 2,
-    studentName: "Nguyễn Văn An",
-    className: "Lý lớp 7",
-    examName: "Đợt 2",
-    value: 9.5,
-    date: "2026-08-19",
-    note: "Tiến bộ rõ rệt",
-  },
-  {
-    id: 3,
-    studentName: "Trần Thị Bình",
-    className: "Toán lớp 6",
-    examName: "Đợt 1",
-    value: 7,
-    date: "2026-08-05",
-    note: "",
-  },
-];
+type ClassOption = { id: number; name: string };
 
 const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 const VN_DATE_REGEX = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
@@ -97,6 +63,11 @@ function parseExcelDate(rawValue: unknown): string | null {
   return null;
 }
 
+// So khớp tên khi import Excel: bỏ khoảng trắng thừa, không phân biệt hoa thường.
+function normalizeName(value: string) {
+  return value.trim().toLowerCase();
+}
+
 const TEMPLATE_HEADERS = [
   "Học sinh",
   "Lớp",
@@ -125,13 +96,47 @@ const emptyFilters: ColumnFilters = {
 };
 
 export default function ScoresPage() {
-  const [scores, setScores] = useState<Score[]>(demoScores);
+  const {
+    data: scores,
+    setData: setScores,
+    loading: scoresLoading,
+    error: scoresError,
+  } = useApiData<Score[]>(scoreApi.list, []);
+  const {
+    data: students,
+    loading: studentsLoading,
+    error: studentsError,
+  } = useApiData(studentApi.list, []);
+  const {
+    data: classes,
+    loading: classesLoading,
+    error: classesError,
+  } = useApiData(classApi.list, []);
+  const loading = scoresLoading || studentsLoading || classesLoading;
+  const loadError = scoresError ?? studentsError ?? classesError;
+
   const [filters, setFilters] = useState<ColumnFilters>(emptyFilters);
   const [showForm, setShowForm] = useState(false);
   useLockBodyScroll(showForm);
   const [editingScore, setEditingScore] = useState<Score | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Tra cứu lớp mà mỗi học sinh đang học — 1 học sinh có thể học nhiều lớp.
+  const studentClassOptions = useMemo(() => {
+    const map = new Map<number, ClassOption[]>();
+    students.forEach((student) => {
+      map.set(
+        student.id,
+        student.classIds.map((id, index) => ({
+          id,
+          name: student.classNames[index] ?? "",
+        }))
+      );
+    });
+    return map;
+  }, [students]);
 
   const classNameOptions = useMemo(
     () => Array.from(new Set(scores.map((item) => item.className))),
@@ -148,7 +153,8 @@ export default function ScoresPage() {
       item.className.toLowerCase().includes(filters.className.toLowerCase()) &&
       item.examName.toLowerCase().includes(filters.examName.toLowerCase()) &&
       String(item.value).includes(filters.value) &&
-      item.date.includes(filters.date) &&
+      (item.date.includes(filters.date) ||
+        formatDateVN(item.date).includes(filters.date)) &&
       item.note.toLowerCase().includes(filters.note.toLowerCase())
     );
   });
@@ -157,7 +163,7 @@ export default function ScoresPage() {
     setFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     const score = scores.find((item) => item.id === id);
 
     if (!score) return;
@@ -168,38 +174,44 @@ export default function ScoresPage() {
 
     if (!confirmed) return;
 
-    setScores((current) => current.filter((item) => item.id !== id));
-
-    setToastMessage(`Xóa điểm của "${score.studentName}" thành công.`);
+    try {
+      await scoreApi.remove(id);
+      setScores((current) => current.filter((item) => item.id !== id));
+      setToastMessage(`Xóa điểm của "${score.studentName}" thành công.`);
+    } catch (error) {
+      console.log(`Delete score ${id} failed`, error);
+      alert(`Xóa điểm thất bại: ${getErrorMessage(error)}`);
+    }
   };
 
   const handleEdit = (score: Score) => {
     setEditingScore(score);
-    setSelectedStudent(score.studentName);
+    setSelectedStudentId(String(score.studentId));
     setShowForm(true);
   };
 
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingScore(null);
-    setSelectedStudent("");
+    setSelectedStudentId("");
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
 
-    const studentName = String(formData.get("studentName") || "");
-    const className = String(formData.get("className") || "");
+    const studentId = Number(formData.get("studentId") || 0);
+    const classId = Number(formData.get("classId") || 0);
     const examName = String(formData.get("examName") || "");
     const value = Number(formData.get("value"));
     const date = String(formData.get("date") || "");
-    const note = String(formData.get("note") || "");
+    // Chỉ bỏ khoảng trắng/dòng trống thừa ở cuối, giữ nguyên định dạng người dùng gõ.
+    const note = String(formData.get("note") || "").trimEnd();
 
     if (
-      !studentName ||
-      !className ||
+      !studentId ||
+      !classId ||
       !examName ||
       Number.isNaN(value) ||
       !date
@@ -213,73 +225,98 @@ export default function ScoresPage() {
       return;
     }
 
-    if (editingScore) {
-      setScores((current) =>
-        current.map((item) =>
-          item.id === editingScore.id
-            ? {
-                ...item,
-                studentName,
-                className,
-                examName,
-                value,
-                date,
-                note,
-              }
-            : item
-        )
+    const input: ScoreInput = { studentId, classId, examName, value, date, note };
+
+    setSaving(true);
+    try {
+      if (editingScore) {
+        const updated = await scoreApi.update(editingScore.id, input);
+        setScores((current) =>
+          current.map((item) => (item.id === updated.id ? updated : item))
+        );
+
+        setToastMessage(`Cập nhật điểm của "${updated.studentName}" thành công.`);
+      } else {
+        const created = await scoreApi.create(input);
+        setScores((current) => [...current, created]);
+
+        setToastMessage(`Thêm điểm cho "${created.studentName}" thành công.`);
+      }
+
+      handleCloseForm();
+    } catch (error) {
+      console.log(
+        editingScore ? `Update score ${editingScore.id} failed` : "Create score failed",
+        input,
+        error
       );
-
-      setToastMessage(`Cập nhật điểm của "${studentName}" thành công.`);
-    } else {
-      const newScore: Score = {
-        id: Date.now(),
-        studentName,
-        className,
-        examName,
-        value,
-        date,
-        note,
-      };
-
-      setScores((current) => [...current, newScore]);
-
-      setToastMessage(`Thêm điểm cho "${studentName}" thành công.`);
+      alert(`Lưu điểm thất bại: ${getErrorMessage(error)}`);
+    } finally {
+      setSaving(false);
     }
-
-    handleCloseForm();
   };
 
   const handleExport = () => {
-    const rows = filteredScores.map((item) => ({
-      "Học sinh": item.studentName,
-      "Lớp": item.className,
-      "Đợt kiểm tra": item.examName,
-      "Điểm": item.value,
+    const headers = ["Học sinh", "Lớp", "Đợt kiểm tra", "Điểm", "Ngày kiểm tra", "Ghi chú"];
+    const rows = filteredScores.map((item) => [
+      item.studentName,
+      item.className,
+      item.examName,
+      item.value,
       // Xuất cùng định dạng DD/MM/YYYY đang hiển thị trên UI, tránh lệch với ISO lưu trong state.
-      "Ngày kiểm tra": new Date(item.date).toLocaleDateString("vi-VN"),
-      "Ghi chú": item.note,
-    }));
+      formatDateVN(item.date),
+      item.note,
+    ]);
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Điểm số");
-    XLSX.writeFile(workbook, "diem-so.xlsx");
-
-    setToastMessage("Export điểm số ra Excel thành công.");
+    try {
+      writeExcelWithBoldHeader(headers, rows, "Điểm số", "diem-so.xlsx");
+      setToastMessage("Export điểm số ra Excel thành công.");
+    } catch (error) {
+      alert(`Export thất bại: ${getErrorMessage(error)}`);
+    }
   };
 
   const handleDownloadTemplate = () => {
-    const worksheet = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Mau diem so");
-    XLSX.writeFile(workbook, "mau-import-diem-so.xlsx");
+    try {
+      writeExcelWithBoldHeader(TEMPLATE_HEADERS, [], "Mau diem so", "mau-import-diem-so.xlsx");
+    } catch (error) {
+      alert(`Tải file mẫu thất bại: ${getErrorMessage(error)}`);
+    }
+  };
+
+  // Tạo lần lượt từng dòng qua API; dòng lỗi được gom lại để báo cho người dùng.
+  const createImportedScores = async (inputs: { row: number; input: ScoreInput }[]) => {
+    const created: Score[] = [];
+    const failedRows: string[] = [];
+
+    for (const { row, input } of inputs) {
+      try {
+        created.push(await scoreApi.create(input));
+      } catch (error) {
+        console.log(`Import score row ${row} failed`, input, error);
+        failedRows.push(`dòng ${row}: ${getErrorMessage(error)}`);
+      }
+    }
+
+    if (created.length > 0) {
+      setScores((current) => [...current, ...created]);
+      setToastMessage(`Import thành công ${created.length} dòng điểm số.`);
+    }
+
+    if (failedRows.length > 0) {
+      alert(`Không import được ${failedRows.length} dòng:\n${failedRows.join("\n")}`);
+    }
   };
 
   const handleImportFile = (file: File) => {
+    if (loading || loadError) {
+      alert("Dữ liệu học sinh/lớp chưa tải xong, vui lòng thử lại sau.");
+      return;
+    }
+
     const reader = new FileReader();
 
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data = event.target?.result;
         const workbook = XLSX.read(data, { type: "binary", cellDates: true });
@@ -294,7 +331,7 @@ export default function ScoresPage() {
 
         const dateErrors: number[] = [];
 
-        const imported: Score[] = rows.map((row, index) => {
+        const imported = rows.map((row, index) => {
           const rawDate =
             row["Ngày kiểm tra"] ??
             row["Ngày kiểm tra (YYYY-MM-DD)"] ??
@@ -306,11 +343,15 @@ export default function ScoresPage() {
           }
 
           return {
-            id: Date.now() + index,
+            row: index + 2,
             studentName: String(row["Học sinh"] ?? "").trim(),
             className: String(row["Lớp"] ?? "").trim(),
             examName: String(row["Đợt kiểm tra"] ?? "").trim(),
-            value: Number(row["Điểm"] ?? 0),
+            // Ô trống -> NaN để bị loại ở bước kiểm tra bên dưới (không ngầm lưu thành 0).
+            value:
+              row["Điểm"] === undefined || String(row["Điểm"]).trim() === ""
+                ? Number.NaN
+                : Number(row["Điểm"]),
             date: parsedDate ?? "",
             note: String(row["Ghi chú"] ?? "").trim(),
           };
@@ -329,16 +370,73 @@ export default function ScoresPage() {
             !item.className ||
             !item.examName ||
             !item.date ||
-            Number.isNaN(item.value)
+            Number.isNaN(item.value) ||
+            item.value < 0 ||
+            item.value > 10
         );
 
         if (invalidRow) {
-          alert("File Excel có dòng thiếu dữ liệu bắt buộc — vui lòng kiểm tra lại.");
+          alert(
+            `File Excel có dòng thiếu dữ liệu bắt buộc hoặc điểm không nằm trong khoảng 0-10 (dòng ${invalidRow.row}) — vui lòng kiểm tra lại.`
+          );
           return;
         }
 
-        setScores((current) => [...current, ...imported]);
-        setToastMessage(`Import thành công ${imported.length} dòng điểm số.`);
+        // Đối chiếu tên học sinh / lớp với dữ liệu thật để lấy id.
+        const resolveErrors: string[] = [];
+        const inputs: { row: number; input: ScoreInput }[] = [];
+
+        imported.forEach((item) => {
+          // Chỉ xét học sinh trùng tên VÀ đang học lớp đó; nếu vẫn còn >1 thì không đoán.
+          const sameName = students.filter(
+            (s) => normalizeName(s.fullName) === normalizeName(item.studentName)
+          );
+          const classItem = classes.find(
+            (c) => normalizeName(c.name) === normalizeName(item.className)
+          );
+
+          if (sameName.length === 0) {
+            resolveErrors.push(`dòng ${item.row}: không tìm thấy học sinh "${item.studentName}"`);
+            return;
+          }
+          if (!classItem) {
+            resolveErrors.push(`dòng ${item.row}: không tìm thấy lớp "${item.className}"`);
+            return;
+          }
+          const inClass = sameName.filter((s) => s.classIds.includes(classItem.id));
+          if (inClass.length > 1) {
+            resolveErrors.push(
+              `dòng ${item.row}: có ${inClass.length} học sinh tên "${item.studentName}" trong lớp "${classItem.name}", hãy nhập điểm cho các em này bằng tay`
+            );
+            return;
+          }
+          const student = inClass[0] ?? sameName[0];
+          if (!student.classIds.includes(classItem.id)) {
+            resolveErrors.push(
+              `dòng ${item.row}: học sinh "${student.fullName}" không học lớp "${classItem.name}"`
+            );
+            return;
+          }
+
+          inputs.push({
+            row: item.row,
+            input: {
+              studentId: student.id,
+              classId: classItem.id,
+              examName: item.examName,
+              value: item.value,
+              date: item.date,
+              note: item.note,
+            },
+          });
+        });
+
+        if (resolveErrors.length > 0) {
+          alert(`File Excel có dòng không hợp lệ:\n${resolveErrors.join("\n")}`);
+          return;
+        }
+
+        await createImportedScores(inputs);
       } catch (error) {
         console.log("Import Excel failed", error);
         alert("Không đọc được file Excel. Vui lòng dùng đúng file mẫu.");
@@ -348,8 +446,8 @@ export default function ScoresPage() {
     reader.readAsBinaryString(file);
   };
 
-  const classOptionsForSelectedStudent = selectedStudent
-    ? studentClassOptions[selectedStudent] ?? []
+  const classOptionsForSelectedStudent = selectedStudentId
+    ? studentClassOptions.get(Number(selectedStudentId)) ?? []
     : [];
 
   return (
@@ -373,7 +471,7 @@ export default function ScoresPage() {
             type="button"
             onClick={() => {
               setEditingScore(null);
-              setSelectedStudent("");
+              setSelectedStudentId("");
               setShowForm(true);
             }}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -440,7 +538,25 @@ export default function ScoresPage() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {filteredScores.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-10 text-center text-gray-500"
+                  >
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-10 text-center text-red-600"
+                  >
+                    Không tải được dữ liệu: {loadError}
+                  </td>
+                </tr>
+              ) : filteredScores.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -485,11 +601,17 @@ export default function ScoresPage() {
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {new Date(score.date).toLocaleDateString("vi-VN")}
+                      {formatDateVN(score.date)}
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {score.note || "-"}
+                      {/* Giữ xuống dòng như lúc nhập; dài quá 3 dòng thì cắt "...", rê chuột để xem đủ. */}
+                      <div
+                        title={score.note || undefined}
+                        className="line-clamp-3 max-w-xs whitespace-pre-wrap break-words"
+                      >
+                        {score.note || "-"}
+                      </div>
                     </td>
 
                     <td className="px-4 py-3">
@@ -557,15 +679,15 @@ export default function ScoresPage() {
                   </label>
 
                   <select
-                    name="studentName"
-                    value={selectedStudent}
-                    onChange={(event) => setSelectedStudent(event.target.value)}
+                    name="studentId"
+                    value={selectedStudentId}
+                    onChange={(event) => setSelectedStudentId(event.target.value)}
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="">Chọn học sinh</option>
-                    {Object.keys(studentClassOptions).map((studentName) => (
-                      <option key={studentName} value={studentName}>
-                        {studentName}
+                    {students.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.fullName}
                       </option>
                     ))}
                   </select>
@@ -577,17 +699,23 @@ export default function ScoresPage() {
                   </label>
 
                   <select
-                    name="className"
-                    defaultValue={editingScore?.className || ""}
-                    disabled={!selectedStudent}
+                    // Đổi key khi đổi học sinh để reset lựa chọn lớp cũ không còn hợp lệ.
+                    key={selectedStudentId}
+                    name="classId"
+                    defaultValue={
+                      editingScore && String(editingScore.studentId) === selectedStudentId
+                        ? editingScore.classId
+                        : ""
+                    }
+                    disabled={!selectedStudentId}
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400"
                   >
                     <option value="">
-                      {selectedStudent ? "Chọn lớp" : "Chọn học sinh trước"}
+                      {selectedStudentId ? "Chọn lớp" : "Chọn học sinh trước"}
                     </option>
-                    {classOptionsForSelectedStudent.map((className) => (
-                      <option key={className} value={className}>
-                        {className}
+                    {classOptionsForSelectedStudent.map((classOption) => (
+                      <option key={classOption.id} value={classOption.id}>
+                        {classOption.name}
                       </option>
                     ))}
                   </select>
@@ -663,9 +791,14 @@ export default function ScoresPage() {
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  disabled={saving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {editingScore ? "Lưu thay đổi" : "Thêm điểm"}
+                  {saving
+                    ? "Đang lưu..."
+                    : editingScore
+                    ? "Lưu thay đổi"
+                    : "Thêm điểm"}
                 </button>
               </div>
             </form>

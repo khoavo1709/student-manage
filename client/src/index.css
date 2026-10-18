@@ -1,3 +1,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* O dang nhap bi trinh duyet tu dien (autofill): trinh duyet to nen xanh nhat va ep mau chu,
+   lech tong voi canh dem. Dung inset box-shadow de phu nen + text-fill-color de doi mau chu. */
+.login-input-day:-webkit-autofill,
+.login-input-day:-webkit-autofill:hover,
+.login-input-day:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px rgb(255 255 255 / 0.6) inset;
+  -webkit-text-fill-color: #1e293b;
+  transition: background-color 99999s ease-out;
+}
+
+.login-input-night:-webkit-autofill,
+.login-input-night:-webkit-autofill:hover,
+.login-input-night:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #121a2c inset;
+  -webkit-text-fill-color: #f1f5f9;
+  caret-color: #fde68a;
+  transition: background-color 99999s ease-out;
+}

@@ -17,6 +17,11 @@ export async function loginHandler(req: Request, res: Response, next: NextFuncti
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, data: null, error: "Invalid request body" });
     }
-    res.status(401).json({ success: false, data: null, error: (error as Error).message });
+    // Chi sai tai khoan/mat khau moi la 401; loi khac (vd: mat ket noi DB) tra 500
+    // voi thong bao chung de khong lo chi tiet noi bo ra client.
+    if (error instanceof Error && error.message === "Invalid username or password") {
+      return res.status(401).json({ success: false, data: null, error: error.message });
+    }
+    res.status(500).json({ success: false, data: null, error: "Login failed" });
   }
 }

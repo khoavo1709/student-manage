@@ -6,6 +6,7 @@ import {
   deleteTuition,
   getTuitionById,
   listTuitions,
+  payTuitions,
   updateTuition,
 } from "../services/tuitionService";
 
@@ -140,5 +141,37 @@ export async function deleteTuitionHandler(req: Request, res: Response) {
       return res.status(404).json({ success: false, data: null, error: error.message });
     }
     res.status(500).json({ success: false, data: null, error: "Failed to delete tuition" });
+  }
+}
+
+const payTuitionsSchema = z.object({
+  studentId: z.number().int().positive(),
+  classId: z.number().int().positive(),
+  months: z
+    .array(
+      z.object({
+        year: z.number().int().positive(),
+        month: z.number().int().min(1).max(12),
+      })
+    )
+    .min(1)
+    .max(120),
+  paidDate: z.coerce.date(),
+});
+
+export async function payTuitionsHandler(req: Request, res: Response) {
+  try {
+    const body = payTuitionsSchema.parse(req.body);
+    const tuitions = await payTuitions(body);
+    res.json({ success: true, data: tuitions, error: null });
+  } catch (error) {
+    console.log("payTuitionsHandler failed", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, data: null, error: "Invalid request body" });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      return res.status(400).json({ success: false, data: null, error: "Student or class not found" });
+    }
+    res.status(500).json({ success: false, data: null, error: "Failed to pay tuitions" });
   }
 }

@@ -1,17 +1,16 @@
 import { useState } from "react";
 import { ClockTimePicker } from "../components/ClockTimePicker";
 import { DatePickerField } from "../components/DatePickerField";
+import { useApiData } from "../hooks/useApiData";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
-
-type Schedule = {
-  id: number;
-  className: string;
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  startDate: string;
-  endDate: string;
-};
+import {
+  classApi,
+  getErrorMessage,
+  scheduleApi,
+  type ClassItem,
+  type Schedule,
+} from "../services/api";
+import { formatDateVN } from "../utils/date";
 
 const dayOfWeekLabels = [
   "Chủ nhật",
@@ -23,42 +22,19 @@ const dayOfWeekLabels = [
   "Thứ 7",
 ];
 
-const demoSchedules: Schedule[] = [
-  {
-    id: 1,
-    className: "Toán lớp 6",
-    dayOfWeek: 2,
-    startTime: "07:30",
-    endTime: "09:00",
-    startDate: "2026-09-01",
-    endDate: "2026-12-31",
-  },
-  {
-    id: 2,
-    className: "Toán lớp 6",
-    dayOfWeek: 4,
-    startTime: "09:15",
-    endTime: "10:45",
-    startDate: "2026-09-01",
-    endDate: "2026-12-31",
-  },
-  {
-    id: 3,
-    className: "Lý lớp 7",
-    dayOfWeek: 3,
-    startTime: "13:30",
-    endTime: "15:00",
-    startDate: "2026-09-01",
-    endDate: "2026-12-31",
-  },
-];
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("vi-VN");
-}
 
 export default function SchedulePage() {
-  const [schedules, setSchedules] = useState<Schedule[]>(demoSchedules);
+  const {
+    data: schedules,
+    setData: setSchedules,
+    loading: schedulesLoading,
+    error: schedulesError,
+  } = useApiData<Schedule[]>(scheduleApi.list, []);
+  const {
+    data: classes,
+    loading: classesLoading,
+    error: classesError,
+  } = useApiData<ClassItem[]>(classApi.list, []);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   useLockBodyScroll(showForm);
@@ -69,23 +45,36 @@ export default function SchedulePage() {
   const [endTime, setEndTime] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loading = schedulesLoading || classesLoading;
+  const error = schedulesError ?? classesError;
+
+  const getClassName = (classId: number) =>
+    classes.find((item) => item.id === classId)?.name ?? `Lớp #${classId}`;
 
   const filteredSchedules = schedules.filter((item) =>
-    item.className.toLowerCase().includes(search.toLowerCase())
+    getClassName(item.classId).toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     const schedule = schedules.find((item) => item.id === id);
 
     if (!schedule) return;
 
     const confirmed = window.confirm(
-      `Bạn có chắc muốn xóa lịch học lớp "${schedule.className}" không?`
+      `Bạn có chắc muốn xóa lịch học lớp "${getClassName(schedule.classId)}" không?`
     );
 
     if (!confirmed) return;
 
-    setSchedules((current) => current.filter((item) => item.id !== id));
+    try {
+      await scheduleApi.remove(id);
+      setSchedules((current) => current.filter((item) => item.id !== id));
+    } catch (err) {
+      console.log(`Delete schedule ${id} failed`, err);
+      alert(`Xóa lịch học thất bại: ${getErrorMessage(err)}`);
+    }
   };
 
   const handleEdit = (schedule: Schedule) => {
@@ -106,16 +95,20 @@ export default function SchedulePage() {
     setEndDate("");
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
 
-    const className = String(formData.get("className") || "");
-    const dayOfWeek = Number(formData.get("dayOfWeek"));
+    const classIdRaw = String(formData.get("classId") || "");
+    const dayOfWeekRaw = String(formData.get("dayOfWeek") ?? "");
+    const classId = Number(classIdRaw);
+    const dayOfWeek = Number(dayOfWeekRaw);
 
     if (
-      !className ||
+      !classIdRaw ||
+      Number.isNaN(classId) ||
+      !dayOfWeekRaw ||
       Number.isNaN(dayOfWeek) ||
       !startTime ||
       !endTime ||
@@ -136,37 +129,44 @@ export default function SchedulePage() {
       return;
     }
 
-    if (editingSchedule) {
-      setSchedules((current) =>
-        current.map((item) =>
-          item.id === editingSchedule.id
-            ? {
-                ...item,
-                className,
-                dayOfWeek,
-                startTime,
-                endTime,
-                startDate,
-                endDate,
-              }
-            : item
-        )
+    const input = {
+      classId,
+      dayOfWeek,
+      startTime,
+      endTime,
+      startDate,
+      endDate,
+    };
+
+    setSaving(true);
+
+    try {
+      if (editingSchedule) {
+        const updated = await scheduleApi.update(editingSchedule.id, input);
+
+        setSchedules((current) =>
+          current.map((item) =>
+            item.id === editingSchedule.id ? updated : item
+          )
+        );
+      } else {
+        const created = await scheduleApi.create(input);
+
+        setSchedules((current) => [...current, created]);
+      }
+
+      handleCloseForm();
+    } catch (err) {
+      console.log(
+        editingSchedule
+          ? `Update schedule ${editingSchedule.id} failed`
+          : "Create schedule failed",
+        err
       );
-    } else {
-      const newSchedule: Schedule = {
-        id: Date.now(),
-        className,
-        dayOfWeek,
-        startTime,
-        endTime,
-        startDate,
-        endDate,
-      };
-
-      setSchedules((current) => [...current, newSchedule]);
+      alert(`Lưu lịch học thất bại: ${getErrorMessage(err)}`);
+    } finally {
+      setSaving(false);
     }
-
-    handleCloseForm();
   };
 
   return (
@@ -253,7 +253,25 @@ export default function SchedulePage() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {filteredSchedules.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-10 text-center text-gray-500"
+                  >
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-10 text-center text-red-600"
+                  >
+                    Không thể tải dữ liệu lịch học: {error}
+                  </td>
+                </tr>
+              ) : filteredSchedules.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -269,7 +287,7 @@ export default function SchedulePage() {
 
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                        {schedule.className}
+                        {getClassName(schedule.classId)}
                       </span>
                     </td>
 
@@ -282,11 +300,11 @@ export default function SchedulePage() {
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {formatDate(schedule.startDate)}
+                      {formatDateVN(schedule.startDate)}
                     </td>
 
                     <td className="px-4 py-3 text-gray-600">
-                      {formatDate(schedule.endDate)}
+                      {formatDateVN(schedule.endDate)}
                     </td>
 
                     <td className="px-4 py-3">
@@ -301,7 +319,7 @@ export default function SchedulePage() {
 
                         <button
                           type="button"
-                          onClick={() => handleDelete(schedule.id)}
+                          onClick={() => void handleDelete(schedule.id)}
                           className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
                         >
                           Xóa
@@ -350,16 +368,16 @@ export default function SchedulePage() {
                   </label>
 
                   <select
-                    name="className"
-                    defaultValue={editingSchedule?.className || ""}
+                    name="classId"
+                    defaultValue={editingSchedule?.classId ?? ""}
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="">Chọn lớp</option>
-                    <option value="Toán lớp 3">Toán lớp 3</option>
-                    <option value="Toán lớp 6">Toán lớp 6</option>
-                    <option value="Lý lớp 7">Lý lớp 7</option>
-                    <option value="Văn lớp 8">Văn lớp 8</option>
-                    <option value="Anh lớp 9">Anh lớp 9</option>
+                    {classes.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -445,9 +463,14 @@ export default function SchedulePage() {
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  disabled={saving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {editingSchedule ? "Lưu thay đổi" : "Thêm lịch học"}
+                  {saving
+                    ? "Đang lưu..."
+                    : editingSchedule
+                      ? "Lưu thay đổi"
+                      : "Thêm lịch học"}
                 </button>
               </div>
             </form>

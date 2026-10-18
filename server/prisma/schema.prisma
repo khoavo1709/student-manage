@@ -36,9 +36,9 @@ model Class {
 // Bang trung gian: 1 hoc sinh co the hoc nhieu lop, 1 lop co nhieu hoc sinh.
 model StudentClass {
   studentId Int
-  student   Student @relation(fields: [studentId], references: [id])
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   classId   Int
-  class     Class   @relation(fields: [classId], references: [id])
+  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
 
   @@id([studentId, classId])
 }
@@ -46,9 +46,9 @@ model StudentClass {
 model Score {
   id        Int      @id @default(autoincrement())
   studentId Int
-  student   Student  @relation(fields: [studentId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   classId   Int      // bai kiem tra thuoc lop nao (hoc sinh co the hoc nhieu lop)
-  class     Class    @relation(fields: [classId], references: [id])
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   examName  String   // VD: "Dot 1", "Dot 2", "Kiem tra giua ky"
   value     Float
   date      DateTime
@@ -58,9 +58,9 @@ model Score {
 model Tuition {
   id        Int       @id @default(autoincrement())
   studentId Int
-  student   Student   @relation(fields: [studentId], references: [id])
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   classId   Int       // hoc sinh hoc nhieu lop se co nhieu khoan phi/thang, moi khoan gan voi 1 lop
-  class     Class     @relation(fields: [classId], references: [id])
+  class     Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
   year      Int
   month     Int       // 1-12
   status    String    // "da dong" | "chua dong"
@@ -72,7 +72,7 @@ model Tuition {
 model Schedule {
   id        Int      @id @default(autoincrement())
   classId   Int
-  class     Class    @relation(fields: [classId], references: [id])
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   dayOfWeek Int      // 0=CN, 1=Thu2, ... 6=Thu7
   startTime String   // "07:30"
   endTime   String   // "09:00"
